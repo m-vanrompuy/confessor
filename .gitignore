@@ -1,0 +1,16 @@
+# Rust build output
+/target
+
+# Geheimen 
+secrets/
+*.pem
+service-account*.json
+.env
+
+# Lokale databank + backups
+*.db
+*.sqlite
+*.sqlite3
+
+# macOS
+.DS_Store
