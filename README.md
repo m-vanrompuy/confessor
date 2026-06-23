@@ -206,7 +206,7 @@ Overzicht van alle processen:
 ## Volgende stappen
 
 1. Rust-projectstructuur opzetten (`cargo new`)
-2. Eerste testverbinding met de Google Forms API (bewijs dat de service-account-toegang ook in Rust werkt)
+2. Eerste testverbinding met de Google Forms API 
 3. Databank-laag (SQLite + ERD hierboven)
 4. Eerste webpagina (Overzicht-scherm)
 5. Verder uitbouwen per proces, volgens de ASD hierboven
