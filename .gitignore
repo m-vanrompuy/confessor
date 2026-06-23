@@ -1,13 +1,16 @@
 # Rust build output
-/target
+target/
+# Node / frontend
+node_modules/
+frontend/dist/
 
-# Geheimen 
+# Geheimen — nooit committen
 secrets/
 *.pem
 service-account*.json
 .env
 
-# Lokale databank + backups
+# Lokale databank (indien nog gebruikt)
 *.db
 *.sqlite
 *.sqlite3
