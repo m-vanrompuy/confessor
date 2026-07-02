@@ -15,11 +15,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let confessions = model::sheets::parse_rows(&rows);
 
     let db = model::firestore::make_firestore_client().await?;
+    let existing_ids = model::firestore::fetch_existing_confession_ids(&db).await?;
 
-    let eerste = &confessions[0];
-    model::firestore::save_confession(&db, eerste).await?;
+    let new_confessions = business::dedupe::filter_new_rows(confessions, &existing_ids);
+    println!("Nieuwe confessions gevonden: {}", new_confessions.len());
 
-    println!("Opgeslagen: {}", eerste.timestamp);
+    for confession_row in &new_confessions {
+        model::firestore::save_confession(&db, confession_row).await?;
+    }
+
+    println!("Opgeslagen: {}", new_confessions.len());
 
     Ok(())
 }
