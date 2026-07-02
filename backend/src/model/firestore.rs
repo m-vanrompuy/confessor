@@ -19,6 +19,7 @@ struct ConfessionIdOnly {
 pub struct Confession {
     pub id: String,
     pub timestamp: String,
+    pub title: String,
     pub text: String,
     pub admin_message: Option<String>,
     pub image_link: Option<String>,
@@ -30,18 +31,18 @@ pub async fn make_firestore_client() -> Result<FirestoreDb, Box<dyn std::error::
     Ok(db)
 }
 
-/// Slaat een confession op in Firestore.
-/// We gebruiken de deterministische ID als document-ID zodat dedupe
-/// later triviaal is: "bestaat dit document al?" = "hebben we dit al gezien?"
+// model/firestore.rs
 pub async fn save_confession(
     db: &FirestoreDb,
     row: &RawConfessionRow,
+    title: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let id = calculate_confession_id(&row.timestamp, &row.text);
 
     let confession = Confession {
         id: id.clone(),
         timestamp: row.timestamp.clone(),
+        title: title.to_string(),
         text: row.text.clone(),
         admin_message: row.admin_message.clone(),
         image_link: row.image_link.clone(),
@@ -77,3 +78,4 @@ pub async fn fetch_existing_confession_ids(
 
     Ok(id_set)
 }
+
