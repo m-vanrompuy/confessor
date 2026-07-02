@@ -20,8 +20,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let new_confessions = business::dedupe::filter_new_rows(confessions, &existing_ids);
     println!("Nieuwe confessions gevonden: {}", new_confessions.len());
 
+
     for confession_row in &new_confessions {
-        model::firestore::save_confession(&db, confession_row).await?;
+        let title = business::title::generate_title(&confession_row.text, 60);
+        model::firestore::save_confession(&db, confession_row, &title).await?;
     }
 
     println!("Opgeslagen: {}", new_confessions.len());
