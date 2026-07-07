@@ -1,9 +1,12 @@
+use axum::Router;
+use axum::routing::post;
 use rustls::crypto::ring;
+use tokio::net::TcpListener;
 
-mod config;
-mod routes;
 mod business;
+mod config;
 mod model;
+mod routes;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,22 +14,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .install_default()
         .expect("failed to install rustls crypto provider");
 
-    let rows = model::sheets::fetch_raw_rows().await?;
-    let confessions = model::sheets::parse_rows(&rows);
+    let app = Router::new().route("/sync", post(routes::sync::sync_confessions));
 
-    let db = model::firestore::make_firestore_client().await?;
-    let existing_ids = model::firestore::fetch_existing_confession_ids(&db).await?;
+    let port = config::server_port();
+    let listener = TcpListener::bind(("0.0.0.0", port)).await?;
+    println!("Server luistert op poort {port}");
 
-    let new_confessions = business::dedupe::filter_new_rows(confessions, &existing_ids);
-    println!("Nieuwe confessions gevonden: {}", new_confessions.len());
-
-
-    for confession_row in &new_confessions {
-        let title = business::title::generate_title(&confession_row.text, 60);
-        model::firestore::save_confession(&db, confession_row, &title).await?;
-    }
-
-    println!("Opgeslagen: {}", new_confessions.len());
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
