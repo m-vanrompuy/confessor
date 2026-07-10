@@ -46,6 +46,17 @@ impl ConfessionStatus {
             ConfessionStatus::Deleted => "deleted",
         }
     }
+
+    /// Zet een status-tekst uit de query-string (bv. "new") om naar de enum.
+    /// Geeft None terug bij een onbekende waarde, zodat de caller dat kan negeren.
+    pub fn from_query_str(value: &str) -> Option<Self> {
+        match value {
+            "new" => Some(ConfessionStatus::New),
+            "used" => Some(ConfessionStatus::Used),
+            "deleted" => Some(ConfessionStatus::Deleted),
+            _ => None,
+        }
+    }
 }
 
 pub async fn make_firestore_client() -> Result<FirestoreDb, Box<dyn std::error::Error>> {

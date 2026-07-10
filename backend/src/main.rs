@@ -1,4 +1,5 @@
 use axum::Router;
+use axum::routing::get;
 use axum::routing::post;
 use rustls::crypto::ring;
 use tokio::net::TcpListener;
@@ -14,7 +15,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .install_default()
         .expect("failed to install rustls crypto provider");
 
-    let app = Router::new().route("/sync", post(routes::sync::sync_confessions));
+    let app = Router::new()
+        .route("/sync", post(routes::sync::sync_confessions))
+        .route("/confessions", get(routes::confessions::list_confessions));
 
     let port = config::server_port();
     let listener = TcpListener::bind(("0.0.0.0", port)).await?;
