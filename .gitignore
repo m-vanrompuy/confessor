@@ -17,3 +17,5 @@ service-account*.json
 
 # macOS
 .DS_Store
+
+ISSUES.md
