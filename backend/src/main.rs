@@ -1,6 +1,7 @@
 use axum::Router;
 use axum::routing::get;
 use axum::routing::post;
+use axum::routing::put;
 use rustls::crypto::ring;
 use tokio::net::TcpListener;
 
@@ -17,7 +18,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .route("/sync", post(routes::sync::sync_confessions))
-        .route("/confessions", get(routes::confessions::list_confessions));
+        .route("/confessions", get(routes::confessions::list_confessions))
+        .route("/tags", post(routes::tags::create_tag))
+        .route(
+            "/tags/{id}",
+            put(routes::tags::update_tag).delete(routes::tags::delete_tag),
+        );
 
     let port = config::server_port();
     let listener = TcpListener::bind(("0.0.0.0", port)).await?;
