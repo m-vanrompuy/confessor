@@ -10,7 +10,6 @@ pub fn calculate_confession_id(timestamp: &str, text: &str) -> String {
     format!("{timestamp}-{text_hash}")
 }
 
-/// Houdt enkel de rijen over die nog niet in Firestore staan (nieuw of tombstone).
 pub fn filter_new_rows(
     rows: Vec<RawConfessionRow>,
     existing_ids: &HashSet<String>,

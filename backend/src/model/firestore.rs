@@ -47,8 +47,6 @@ impl ConfessionStatus {
         }
     }
 
-    /// Zet een status-tekst uit de query-string (bv. "new") om naar de enum.
-    /// Geeft None terug bij een onbekende waarde, zodat de caller dat kan negeren.
     pub fn from_query_str(value: &str) -> Option<Self> {
         match value {
             "new" => Some(ConfessionStatus::New),
@@ -116,8 +114,6 @@ pub const TAGS_COLLECTION: &str = "tags";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Tag {
-    /// None bij het aanmaken (Firestore genereert het zelf). Ingevuld bij het teruglezen
-    /// via de `_firestore_id`-alias die de firestore-crate hiervoor voorziet.
     #[serde(alias = "_firestore_id")]
     pub id: Option<String>,
     pub name: String,
@@ -152,8 +148,6 @@ pub async fn rename_tag(
     tag_id: &str,
     new_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // color blijft leeg: .fields() zorgt dat enkel `name` effectief geschreven wordt,
-    // de rest van dit object dient enkel als (genegeerde) placeholder.
     let placeholder_tag = Tag {
         id: None,
         name: new_name.to_string(),
@@ -271,3 +265,32 @@ pub async fn update_confession_tags(
     Ok(())
 }
 
+/// Verwijdert een confession volgens het tombstone-pattern: enkel het document-ID
+/// blijft ongewijzigd, alle inhoud wordt gewist (zie business::tombstone).
+pub async fn delete_confession(
+    db: &FirestoreDb,
+    confession_id: &str,
+    tombstoned_content: crate::business::tombstone::TombstonedContent,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        id: String::new(),
+        timestamp: String::new(),
+        title: tombstoned_content.title,
+        text: tombstoned_content.text,
+        admin_message: tombstoned_content.admin_message,
+        image_link: tombstoned_content.image_link,
+        status: tombstoned_content.status,
+        tag_ids: tombstoned_content.tag_ids,
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{title, text, admin_message, image_link, status, tag_ids}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
