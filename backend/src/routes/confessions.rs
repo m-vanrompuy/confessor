@@ -1,6 +1,7 @@
 //! Controller-laag: HTTP-routes voor confessions.
 
 use crate::business::tagging::dedupe_tag_ids;
+use crate::business::tombstone::build_tombstoned_content;
 use crate::model::firestore;
 use crate::model::firestore::Confession;
 use crate::model::firestore::ConfessionStatus;
@@ -53,6 +54,23 @@ pub async fn update_confession_tags(
     let deduped_tag_ids = dedupe_tag_ids(request.tag_ids);
 
     firestore::update_confession_tags(&db, &confession_id, &deduped_tag_ids)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// HTTP-handler voor DELETE /confessions/{id}. Past het tombstone-pattern toe.
+pub async fn delete_confession(
+    Path(confession_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let db = firestore::make_firestore_client()
+        .await
+        .map_err(internal_error)?;
+
+    let tombstoned_content = build_tombstoned_content();
+
+    firestore::delete_confession(&db, &confession_id, tombstoned_content)
         .await
         .map_err(internal_error)?;
 

@@ -4,3 +4,4 @@ pub mod title;
 pub mod template;
 pub mod numbering;
 pub mod tagging;
+pub mod tombstone;
