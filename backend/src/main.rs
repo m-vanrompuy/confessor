@@ -25,6 +25,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             delete(routes::confessions::delete_confession),
         )
         .route(
+            "/confessions/{id}/use",
+            put(routes::confessions::mark_confession_as_used),
+        )
+        .route(
             "/confessions/{id}/tags",
             put(routes::confessions::update_confession_tags),
         )

@@ -1,6 +1,7 @@
 //! Controller-laag: HTTP-routes voor confessions.
 
 use crate::business::tagging::dedupe_tag_ids;
+use crate::business::numbering::determine_next_sequence_number;
 use crate::business::tombstone::build_tombstoned_content;
 use crate::model::firestore;
 use crate::model::firestore::Confession;
@@ -71,6 +72,28 @@ pub async fn delete_confession(
     let tombstoned_content = build_tombstoned_content();
 
     firestore::delete_confession(&db, &confession_id, tombstoned_content)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// HTTP-handler voor PUT /confessions/{id}/use. Kent het volgende volgnummer toe
+/// en zet de status op "used".
+pub async fn mark_confession_as_used(
+    Path(confession_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let db = firestore::make_firestore_client()
+        .await
+        .map_err(internal_error)?;
+
+    let existing_numbers = firestore::fetch_used_sequence_numbers(&db)
+        .await
+        .map_err(internal_error)?;
+
+    let next_number = determine_next_sequence_number(&existing_numbers);
+
+    firestore::mark_confession_as_used(&db, &confession_id, next_number)
         .await
         .map_err(internal_error)?;
 

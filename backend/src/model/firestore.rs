@@ -29,6 +29,8 @@ pub struct Confession {
     pub status: String,
     #[serde(default)]
     pub tag_ids: Vec<String>,
+    #[serde(default)]
+    pub sequence_number: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +80,7 @@ pub async fn save_confession(
         image_link: row.image_link.clone(),
         status: "new".to_string(),
         tag_ids: Vec::new(),
+        sequence_number: None,
     };
 
     db.fluent()
@@ -251,6 +254,7 @@ pub async fn update_confession_tags(
         image_link: None,
         status: String::new(),
         tag_ids: tag_ids.to_vec(),
+        sequence_number: None,
     };
 
     db.fluent()
@@ -281,11 +285,71 @@ pub async fn delete_confession(
         image_link: tombstoned_content.image_link,
         status: tombstoned_content.status,
         tag_ids: tombstoned_content.tag_ids,
+        sequence_number: None,
     };
 
     db.fluent()
         .update()
         .fields(paths!(Confession::{title, text, admin_message, image_link, status, tag_ids}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct ConfessionSequenceNumberOnly {
+    sequence_number: Option<u32>,
+}
+
+pub async fn fetch_used_sequence_numbers(
+    db: &FirestoreDb,
+) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
+    let number_stream: BoxStream<ConfessionSequenceNumberOnly> = db
+        .fluent()
+        .select()
+        .fields(paths!(ConfessionSequenceNumberOnly::{sequence_number}))
+        .from(CONFESSIONS_COLLECTION)
+        .filter(|filter_builder| {
+            filter_builder.for_all([filter_builder.field(path!(Confession::status)).eq("used")])
+        })
+        .obj()
+        .stream_query()
+        .await?;
+
+    let all_entries: Vec<ConfessionSequenceNumberOnly> = number_stream.collect().await;
+
+    let sequence_numbers: Vec<u32> = all_entries
+        .into_iter()
+        .filter_map(|entry| entry.sequence_number)
+        .collect();
+
+    Ok(sequence_numbers)
+}
+
+pub async fn mark_confession_as_used(
+    db: &FirestoreDb,
+    confession_id: &str,
+    sequence_number: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        id: String::new(),
+        timestamp: String::new(),
+        title: String::new(),
+        text: String::new(),
+        admin_message: None,
+        image_link: None,
+        status: "used".to_string(),
+        tag_ids: Vec::new(),
+        sequence_number: Some(sequence_number),
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{status, sequence_number}))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)
