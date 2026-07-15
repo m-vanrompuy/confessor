@@ -243,3 +243,31 @@ fn build_filter_conditions(
     [status_condition, tag_condition].into_iter().flatten().collect()
 }
 
+pub async fn update_confession_tags(
+    db: &FirestoreDb,
+    confession_id: &str,
+    tag_ids: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        id: String::new(),
+        timestamp: String::new(),
+        title: String::new(),
+        text: String::new(),
+        admin_message: None,
+        image_link: None,
+        status: String::new(),
+        tag_ids: tag_ids.to_vec(),
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{tag_ids}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+

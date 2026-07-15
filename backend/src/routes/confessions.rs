@@ -1,9 +1,11 @@
 //! Controller-laag: HTTP-routes voor confessions.
 
+use crate::business::tagging::dedupe_tag_ids;
 use crate::model::firestore;
 use crate::model::firestore::Confession;
 use crate::model::firestore::ConfessionStatus;
 use axum::Json;
+use axum::extract::Path;
 use axum::extract::Query;
 use axum::http::StatusCode;
 use serde::Deserialize;
@@ -32,6 +34,29 @@ pub async fn list_confessions(
         .map_err(internal_error)?;
 
     Ok(Json(confessions))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateConfessionTagsRequest {
+    tag_ids: Vec<String>,
+}
+
+/// HTTP-handler voor PUT /confessions/{id}/tags. Overschrijft de volledige tag-lijst.
+pub async fn update_confession_tags(
+    Path(confession_id): Path<String>,
+    Json(request): Json<UpdateConfessionTagsRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let db = firestore::make_firestore_client()
+        .await
+        .map_err(internal_error)?;
+
+    let deduped_tag_ids = dedupe_tag_ids(request.tag_ids);
+
+    firestore::update_confession_tags(&db, &confession_id, &deduped_tag_ids)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn parse_status_filter(status: &Option<String>) -> Option<ConfessionStatus> {

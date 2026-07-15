@@ -19,6 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/sync", post(routes::sync::sync_confessions))
         .route("/confessions", get(routes::confessions::list_confessions))
+        .route(
+            "/confessions/{id}/tags",
+            put(routes::confessions::update_confession_tags),
+        )
         .route("/tags", post(routes::tags::create_tag))
         .route(
             "/tags/{id}",

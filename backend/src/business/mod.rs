@@ -3,3 +3,4 @@ pub mod dedupe;
 pub mod title;
 pub mod template;
 pub mod numbering;
+pub mod tagging;

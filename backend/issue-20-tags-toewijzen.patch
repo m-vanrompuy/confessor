@@ -1,0 +1,93 @@
+diff --git a/backend/src/business/mod.rs b/backend/src/business/mod.rs
+index 8131080..28fc985 100644
+--- a/backend/src/business/mod.rs
++++ b/backend/src/business/mod.rs
+@@ -3,3 +3,4 @@ pub mod dedupe;
+ pub mod title;
+ pub mod template;
+ pub mod numbering;
++pub mod tagging;
+diff --git a/backend/src/business/tagging.rs b/backend/src/business/tagging.rs
+new file mode 100644
+index 0000000..0c03f06
+--- /dev/null
++++ b/backend/src/business/tagging.rs
+@@ -0,0 +1,17 @@
++//! Business logic-laag: regels voor het toewijzen van tags aan een confession.
++
++use std::collections::HashSet;
++
++/// Verwijdert dubbele tag-ID's uit de lijst, met behoud van de originele volgorde.
++pub fn dedupe_tag_ids(tag_ids: Vec<String>) -> Vec<String> {
++    let mut seen_ids = HashSet::new();
++    let mut deduped_ids = Vec::new();
++
++    for tag_id in tag_ids {
++        if seen_ids.insert(tag_id.clone()) {
++            deduped_ids.push(tag_id);
++        }
++    }
++
++    deduped_ids
++}
+diff --git a/backend/src/main.rs b/backend/src/main.rs
+index 80f5ef2..9d29694 100644
+--- a/backend/src/main.rs
++++ b/backend/src/main.rs
+@@ -19,6 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
+     let app = Router::new()
+         .route("/sync", post(routes::sync::sync_confessions))
+         .route("/confessions", get(routes::confessions::list_confessions))
++        .route(
++            "/confessions/{id}/tags",
++            put(routes::confessions::update_confession_tags),
++        )
+         .route("/tags", post(routes::tags::create_tag))
+         .route(
+             "/tags/{id}",
+diff --git a/backend/src/routes/confessions.rs b/backend/src/routes/confessions.rs
+index fa344c9..8bed067 100644
+--- a/backend/src/routes/confessions.rs
++++ b/backend/src/routes/confessions.rs
+@@ -1,9 +1,11 @@
+ //! Controller-laag: HTTP-routes voor confessions.
+ 
++use crate::business::tagging::dedupe_tag_ids;
+ use crate::model::firestore;
+ use crate::model::firestore::Confession;
+ use crate::model::firestore::ConfessionStatus;
+ use axum::Json;
++use axum::extract::Path;
+ use axum::extract::Query;
+ use axum::http::StatusCode;
+ use serde::Deserialize;
+@@ -34,6 +36,29 @@ pub async fn list_confessions(
+     Ok(Json(confessions))
+ }
+ 
++#[derive(Deserialize)]
++pub struct UpdateConfessionTagsRequest {
++    tag_ids: Vec<String>,
++}
++
++/// HTTP-handler voor PUT /confessions/{id}/tags. Overschrijft de volledige tag-lijst.
++pub async fn update_confession_tags(
++    Path(confession_id): Path<String>,
++    Json(request): Json<UpdateConfessionTagsRequest>,
++) -> Result<StatusCode, (StatusCode, String)> {
++    let db = firestore::make_firestore_client()
++        .await
++        .map_err(internal_error)?;
++
++    let deduped_tag_ids = dedupe_tag_ids(request.tag_ids);
++
++    firestore::update_confession_tags(&db, &confession_id, &deduped_tag_ids)
++        .await
++        .map_err(internal_error)?;
++
++    Ok(StatusCode::NO_CONTENT)
++}
++
+ fn parse_status_filter(status: &Option<String>) -> Option<ConfessionStatus> {
+     status.as_ref().and_then(|value| ConfessionStatus::from_query_str(value))
+ }
