@@ -10,7 +10,6 @@ use futures::stream::BoxStream;
 use futures::StreamExt;
 use std::collections::HashSet;
 
-const PROJECT_ID: &str = "confessions-461517";
 pub const CONFESSIONS_COLLECTION: &str = "confessions";
 
 #[derive(Debug, Deserialize)]
@@ -57,11 +56,6 @@ impl ConfessionStatus {
             _ => None,
         }
     }
-}
-
-pub async fn make_firestore_client() -> Result<FirestoreDb, Box<dyn std::error::Error>> {
-    let db = FirestoreDb::new(PROJECT_ID).await?;
-    Ok(db)
 }
 
 pub async fn save_confession(
@@ -111,99 +105,6 @@ pub async fn fetch_existing_confession_ids(
     let id_set: HashSet<String> = all_ids.into_iter().map(|item| item.id).collect();
 
     Ok(id_set)
-}
-
-pub const TAGS_COLLECTION: &str = "tags";
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Tag {
-    #[serde(alias = "_firestore_id")]
-    pub id: Option<String>,
-    pub name: String,
-    pub color: String,
-}
-
-pub async fn create_tag(
-    db: &FirestoreDb,
-    name: &str,
-    color: &str,
-) -> Result<Tag, Box<dyn std::error::Error>> {
-    let new_tag = Tag {
-        id: None,
-        name: name.to_string(),
-        color: color.to_string(),
-    };
-
-    let saved_tag = db
-        .fluent()
-        .insert()
-        .into(TAGS_COLLECTION)
-        .generate_document_id()
-        .object(&new_tag)
-        .execute::<Tag>()
-        .await?;
-
-    Ok(saved_tag)
-}
-
-pub async fn rename_tag(
-    db: &FirestoreDb,
-    tag_id: &str,
-    new_name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let placeholder_tag = Tag {
-        id: None,
-        name: new_name.to_string(),
-        color: String::new(),
-    };
-
-    db.fluent()
-        .update()
-        .fields(paths!(Tag::{name}))
-        .in_col(TAGS_COLLECTION)
-        .document_id(tag_id)
-        .object(&placeholder_tag)
-        .execute::<Tag>()
-        .await?;
-
-    Ok(())
-}
-
-pub async fn set_tag_color(
-    db: &FirestoreDb,
-    tag_id: &str,
-    new_color: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let placeholder_tag = Tag {
-        id: None,
-        name: String::new(),
-        color: new_color.to_string(),
-    };
-
-    db.fluent()
-        .update()
-        .fields(paths!(Tag::{color}))
-        .in_col(TAGS_COLLECTION)
-        .document_id(tag_id)
-        .object(&placeholder_tag)
-        .execute::<Tag>()
-        .await?;
-
-    Ok(())
-}
-
-pub async fn delete_tag(
-    db: &FirestoreDb,
-    tag_id: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    db.fluent()
-        .delete()
-        .from(TAGS_COLLECTION)
-        .document_id(tag_id)
-        .execute()
-        .await?;
-
-    Ok(())
 }
 
 pub async fn fetch_confessions(
@@ -269,7 +170,6 @@ pub async fn update_confession_tags(
     Ok(())
 }
 
-/// Verwijdert een confession volgens het tombstone-pattern: enkel het document-ID
 /// blijft ongewijzigd, alle inhoud wordt gewist (zie business::tombstone).
 pub async fn delete_confession(
     db: &FirestoreDb,
