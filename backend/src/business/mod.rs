@@ -5,3 +5,4 @@ pub mod template;
 pub mod numbering;
 pub mod tagging;
 pub mod tombstone;
+pub mod settings;

@@ -36,6 +36,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/tags/{id}",
             put(routes::tags::update_tag).delete(routes::tags::delete_tag),
+        )
+        .route(
+            "/settings/template",
+            get(routes::settings::get_template_config).put(routes::settings::update_template_config),
+        )
+        .route(
+            "/settings/{key}",
+            get(routes::settings::get_setting).put(routes::settings::update_setting),
         );
 
     let port = config::server_port();
