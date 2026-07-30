@@ -1,0 +1,7 @@
+<svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg">
+  <image href="background.png" x="0" y="0" width="1080" height="1080" preserveAspectRatio="xMidYMid slice"/>
+
+  <text x="160" y="285" font-family="{{FONT_FAMILY}}" font-size="{{NUMBER_FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="start">#{{NUMBER}}</text>
+
+  <text y="270" font-family="{{FONT_FAMILY}}" font-size="{{FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="start">{{LINES}}</text>
+</svg>
