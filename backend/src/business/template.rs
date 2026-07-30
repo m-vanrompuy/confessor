@@ -108,6 +108,34 @@ fn flush(slides: &mut Vec<String>, current: &mut String) {
     }
 }
 
+pub fn wrap_paragraph_into_lines(text: &str, max_chars_per_line: usize) -> Vec<String> {
+    let paragraphs = split_into_paragraphs(text);
+    let mut lines = Vec::new();
+
+    for paragraph in paragraphs {
+        let mut paragraph_lines = wrap_on_word_boundary(&paragraph, max_chars_per_line);
+        lines.append(&mut paragraph_lines);
+    }
+
+    lines
+}
+
+fn wrap_on_word_boundary(text: &str, max_chars_per_line: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+
+    for word in text.split_whitespace() {
+        let fits_in_current_line = fits(&current_line, word, " ", max_chars_per_line);
+        if !current_line.is_empty() && !fits_in_current_line {
+            flush(&mut lines, &mut current_line);
+        }
+        add_piece(&mut current_line, word, " ");
+    }
+
+    flush(&mut lines, &mut current_line);
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,5 +165,19 @@ mod tests {
         let text = "een twee drie vier vijf";
         let slides = split_text_into_slides(text, 10);
         assert_eq!(slides, vec!["een twee", "drie vier", "vijf"]);
+    }
+
+    #[test]
+    fn wrap_fills_lines_fully_even_with_early_period() {
+        let text = "tijdje kwijt wil. Het begon allemaal op een gewone dinsdag.";
+        let lines = wrap_paragraph_into_lines(text, 40);
+        assert_eq!(lines[0], "tijdje kwijt wil. Het begon allemaal op");
+    }
+
+    #[test]
+    fn wrap_forces_new_line_on_paragraph_break() {
+        let text = "Eerste alinea kort.\n\nTweede alinea kort.";
+        let lines = wrap_paragraph_into_lines(text, 100);
+        assert_eq!(lines, vec!["Eerste alinea kort.", "Tweede alinea kort."]);
     }
 }
