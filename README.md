@@ -37,10 +37,10 @@ Een tool om de admin van de Instagram-pagina "KU Leuven Confessions" te helpen b
 
 Cloud Run en Cloud Storage for Firebase vereisen een betaalplan (Blaze) met een gekoppelde kaart, ook al blijft het verwachte verbruik ruim binnen het gratis quotum. Om verrassingen uit te sluiten:
 
-- **Budget-alert** ingesteld op een laag bedrag (bv. €2), als vroege waarschuwing.
-- **Automatische killswitch**: een budget-overschrijding stuurt een bericht naar een Pub/Sub-topic, dat een klein functietje activeert dat de betaalkoppeling van het project loskoppelt. Geen koppeling = onmogelijk om nog kosten te maken. Dit zet alle diensten in het project stil (ook de gratis onderdelen) — voor dit project een aanvaardbare prijs voor financiële zekerheid.
-- Realistisch verbruik (1-2 gebruikers, occasioneel) blijft ordes van grootte onder het gratis quotum van Cloud Run (2 miljoen verzoeken/maand, 180.000 vCPU-seconden/maand). Het reële risico is een bug die ongemerkt continu blijft draaien — daarvoor dient de killswitch.
-- De killswitch wordt opgezet **voor** de overstap naar het Blaze-plan, niet erna.
+- **Budget-alert** ingesteld op een laag bedrag (bv. €2), als vroege waarschuwing. Google stuurt hierbij automatisch een e-mail naar de billing-account-beheerders bij elke drempel (50/90/100%) — dit werkt out-of-the-box, zonder extra opzet.
+- **Killswitch = native Spend Cap budgets** (Google Cloud, preview sinds juli 2026) op **Cloud Run** en **Cloud Run functions**, elk op €0,01. Zodra de geschatte brutokost de cap bereikt, blokkeert Google Cloud zelf automatisch nieuwe requests naar die dienst (near-realtime, binnen enkele minuten) — lopende requests maken nog af, en de cap moet manueel terug opgeheven worden in de Console. Geen eigen Cloud Function, Pub/Sub-topic of IAM-opzet nodig.
+- **Belangrijke beperking:** spend caps dekken op dit moment enkel Gemini API, Agent Platform, Cloud Run en Cloud Run functions — **niet Firestore of Cloud Storage** (issues #6/#28). Voor die diensten blijft enkel de budget-alert e-mail als vroege waarschuwing; overschrijding daar vraagt een manuele reactie (betaalkoppeling loskoppelen via Cloud Console).
+- Realistisch verbruik (1-2 gebruikers, occasioneel) blijft ordes van grootte onder het gratis quotum van Cloud Run (2 miljoen verzoeken/maand, 180.000 vCPU-seconden/maand). Het reële risico — een bug die ongemerkt continu blijft draaien — wordt voor Cloud Run zelf dus automatisch afgevangen; voor Firestore/Storage blijft het bij waakzaamheid op de budget-mail.
 
 ---
 
