@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 axum = "0.8.9"
+dotenvy = "0.15"
 firestore = "0.49.0"
 gcp_auth = "0.12.7"
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
