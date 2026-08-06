@@ -15,6 +15,9 @@ service-account*.json
 *.sqlite
 *.sqlite3
 
+# Test-output (image_render.rs schrijft deze weg voor manuele visuele controle)
+backend/test_output*.png
+
 # macOS
 .DS_Store
 
