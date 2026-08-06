@@ -1,21 +1,17 @@
 //! Model-laag: haalt de ruwe confession-rijen op uit de Google Sheet.
 
-use gcp_auth::{CustomServiceAccount, TokenProvider};
-use std::path::PathBuf;
+use crate::config;
 
 const SCOPE: &str = "https://www.googleapis.com/auth/spreadsheets.readonly";
 
-const SHEET_ID: &str = "1W_Yuo-ql5lneUYsChpH_nfBFeeisKhJaPA0bEPuWero";
-const TAB_NAME: &str = "Formulierreacties 1";
-
 pub async fn fetch_raw_rows() -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
-    let credentials_path = PathBuf::from("secrets/service-account.json");
-    let service_account = CustomServiceAccount::from_file(credentials_path)?;
-    let token = service_account.token(&[SCOPE]).await?;
+    let provider = gcp_auth::provider().await?;
+    let token = provider.token(&[SCOPE]).await?;
 
-    let encoded_tab = TAB_NAME.replace(' ', "%20");
+    let encoded_tab = config::sheet_tab_name().replace(' ', "%20");
     let range = format!("{encoded_tab}!A:Z");
-    let url = format!("https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{range}");
+    let sheet_id = config::sheet_id();
+    let url = format!("https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{range}");
 
     let client = reqwest::Client::new();
     let response = client.get(&url).bearer_auth(token.as_str()).send().await?;

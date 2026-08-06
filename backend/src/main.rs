@@ -13,6 +13,10 @@ mod routes;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Laadt .env lokaal in als omgevingsvariabelen; op Cloud Run bestaat dat
+    // bestand niet en doet dit dus niets (vandaar .ok() i.p.v. een crash).
+    dotenvy::dotenv().ok();
+
     ring::default_provider()
         .install_default()
         .expect("failed to install rustls crypto provider");
