@@ -24,7 +24,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --region="${REGION}" \
   --image="${IMAGE}" \
   --service-account="${SERVICE_ACCOUNT}" \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},SHEET_ID=1W_Yuo-ql5lneUYsChpH_nfBFeeisKhJaPA0bEPuWero" \
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},SHEET_ID=1W_Yuo-ql5lneUYsChpH_nfBFeeisKhJaPA0bEPuWero,STORAGE_BUCKET=confessions-461517.firebasestorage.app" \
   --max-instances=3 \
   --port=8080 \
   --no-allow-unauthenticated \
