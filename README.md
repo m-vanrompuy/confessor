@@ -63,7 +63,6 @@ Cloud Run en Cloud Storage for Firebase vereisen een betaalplan (Blaze) met een 
 ```mermaid
 erDiagram
   CONFESSION ||--o{ ATTACHMENT : has
-  CONFESSION ||--o{ SLIDE : produces
   CONFESSION }o--o{ TAG : tagged_with
   CONFESSION {
     int id PK
@@ -72,6 +71,7 @@ erDiagram
     string form_response_id
     string summary_title
     string suggested_caption
+    string[] slide_paths
     string status
     int sequence_number
     datetime used_at
@@ -89,12 +89,6 @@ erDiagram
     int id PK
     string name
     string color
-  }
-  SLIDE {
-    int id PK
-    int confession_id FK
-    int slide_index
-    string storage_path
   }
   TEMPLATE_CONFIG {
     int id PK
@@ -114,7 +108,7 @@ erDiagram
 - **Tombstone-pattern**: "verwijderen" wist de inhoud (tekst, privébericht, foto's, tags) maar behoudt het rijtje zelf (`id` + `form_response_id` + `status = verwijderd`). Dit voorkomt dat een verwijderde confession bij de volgende sync terug binnenkomt als "nieuw" — en omdat het Overzicht standaard op status filtert, valt hij ook gewoon uit de normale lijst.
 - `admin_message` (het privébericht aan de admin) mag **nooit** in de gegenereerde afbeelding of caption terechtkomen.
 - `Tag` is generiek en dekt categorie, type én kwaliteit (bv. "meme", "zoekertje", "all stars").
-- **Firestore-vertaling**: `Confession` wordt een document in een `confessions`-collectie met een `tagIds`-array erin; `Attachment` en `Slide` worden subcollecties met enkel een verwijzing (`storage_path`) naar het werkelijke bestand in Cloud Storage.
+- **Firestore-vertaling**: `Confession` wordt een document in een `confessions`-collectie met een `tagIds`-array erin. Slide-afbeeldingen worden **niet** als aparte subcollectie bewaard (bewust vereenvoudigd bij issue #29: slides worden altijd samen met hun confession gelezen/geschreven, nooit individueel) — hun paden staan gewoon als een geordende `slide_paths`-array op de Confession zelf, index = slide-nummer. `Attachment` (issue #38b) is nog wel gepland als subcollectie, want dat is een aparte, nog te ontwerpen beslissing.
 
 ---
 

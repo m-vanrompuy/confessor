@@ -30,6 +30,11 @@ pub struct Confession {
     pub tag_ids: Vec<String>,
     #[serde(default)]
     pub sequence_number: Option<u32>,
+    #[serde(default)]
+    pub suggested_caption: Option<String>,
+    /// Storage-pad per gerenderde slide, op volgorde (index = slide-nummer).
+    #[serde(default)]
+    pub slide_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +80,8 @@ pub async fn save_confession(
         status: "new".to_string(),
         tag_ids: Vec::new(),
         sequence_number: None,
+        suggested_caption: None,
+        slide_paths: Vec::new(),
     };
 
     db.fluent()
@@ -105,6 +112,21 @@ pub async fn fetch_existing_confession_ids(
     let id_set: HashSet<String> = all_ids.into_iter().map(|item| item.id).collect();
 
     Ok(id_set)
+}
+
+pub async fn fetch_confession_by_id(
+    db: &FirestoreDb,
+    confession_id: &str,
+) -> Result<Option<Confession>, Box<dyn std::error::Error>> {
+    let confession: Option<Confession> = db
+        .fluent()
+        .select()
+        .by_id_in(CONFESSIONS_COLLECTION)
+        .obj()
+        .one(confession_id)
+        .await?;
+
+    Ok(confession)
 }
 
 pub async fn fetch_confessions(
@@ -156,6 +178,8 @@ pub async fn update_confession_tags(
         status: String::new(),
         tag_ids: tag_ids.to_vec(),
         sequence_number: None,
+        suggested_caption: None,
+        slide_paths: Vec::new(),
     };
 
     db.fluent()
@@ -186,11 +210,45 @@ pub async fn delete_confession(
         status: tombstoned_content.status,
         tag_ids: tombstoned_content.tag_ids,
         sequence_number: None,
+        suggested_caption: None,
+        slide_paths: Vec::new(),
     };
 
     db.fluent()
         .update()
         .fields(paths!(Confession::{title, text, admin_message, image_link, status, tag_ids}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
+pub async fn save_generated_images(
+    db: &FirestoreDb,
+    confession_id: &str,
+    slide_paths: &[String],
+    suggested_caption: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        id: String::new(),
+        timestamp: String::new(),
+        title: String::new(),
+        text: String::new(),
+        admin_message: None,
+        image_link: None,
+        status: String::new(),
+        tag_ids: Vec::new(),
+        sequence_number: None,
+        suggested_caption: Some(suggested_caption.to_string()),
+        slide_paths: slide_paths.to_vec(),
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{suggested_caption, slide_paths}))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)
@@ -245,6 +303,8 @@ pub async fn mark_confession_as_used(
         status: "used".to_string(),
         tag_ids: Vec::new(),
         sequence_number: Some(sequence_number),
+        suggested_caption: None,
+        slide_paths: Vec::new(),
     };
 
     db.fluent()
