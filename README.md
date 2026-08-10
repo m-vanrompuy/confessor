@@ -256,15 +256,27 @@ kuleuven-confessions-tool/
 - Service-account heeft enkel leesrechten, geen schrijf/verwijderrechten op de Sheet
 - Het Sheet-ID zelf is geen geheim en mag gedeeld worden; de sleutel (`private_key`) wél altijd geheim houden
 
+## Deployment
+
+- **Service:** `confessor-backend`, Cloud Run, regio `europe-west1` (zelfde regio als Firestore)
+- **Herdeployen:** `backend/deploy.sh [tag]` — bouwt de image (linux/amd64, ook vanaf Apple Silicon), pusht naar Artifact Registry, deployt naar Cloud Run
+- **Toegang:** momenteel `--no-allow-unauthenticated` (IAM-gated) — er is nog geen wachtwoord-scherm (issue #31), dus de service staat bewust **niet** publiek open. Pas naar `--allow-unauthenticated` zetten zodra dat scherm bestaat, niet eerder.
+- **Auth:** de service draait onder het bestaande `kul-confessions@`-service-account (ADC via Cloud Run's gekoppelde identiteit, zie issue #9 — geen sleutelbestand in de container)
+
 ## Status & volgende stappen
 
 - [x] Ontwerp (datamodel, schermen, procesflows, architectuur)
 - [x] Projectstructuur opgezet (backend + frontend monorepo)
-- [x] Eerste testverbinding bevestigd (service-account kan data ophalen)
-- [x] Frontend gescaffold met Vite + React, eerste atoom gegenereerd met `atomic-bomb`
-- [x] Sheet gedeeld met het service-account (Viewer-rol) — *te bevestigen*
-- [ ] Sheets-API-code schrijven (tabblad: "Formulierreacties 1")
-- [ ] Firebase-project aanmaken, Firestore inschakelen
-- [ ] Budget-alert + killswitch opzetten, dan upgraden naar Blaze
-- [ ] Cloud Storage for Firebase inschakelen, Dockerfile + Cloud Run-deployment opzetten
-- [ ] Eerste end-to-end pad: confession ophalen → in Firestore opslaan → tonen in de React-lijst
+- [x] Sheet gedeeld met het service-account (Viewer-rol)
+- [x] Sheets-API-code + Firestore-client + eerste verticale pad (sync → dedupe → titel → opslaan)
+- [x] Firebase-project aangemaakt, Firestore ingeschakeld
+- [x] Budget-alert + killswitch (native Spend Cap budgets) + overstap naar Blaze
+- [x] Cloud Storage for Firebase ingeschakeld (no-cost region, US-EAST1)
+- [x] Config gecentraliseerd, ADC-auth i.p.v. hardcoded sleutelbestand
+- [x] Dockerfile + Cloud Run-deployment, getest vanaf laptop (IAM-gated)
+- [x] Backend: bekijken/filteren, taggen, verwijderen, markeren-als-gebruikt, instellingen-CRUD
+- [x] Afbeelding-rendering (SVG → PNG), tekst-verdeling over slides
+- [ ] Afbeelding-upload naar Cloud Storage + genereer-endpoint (issues #28-29)
+- [ ] Meme/afbeelding van Drive ophalen (issue #38b)
+- [ ] Like/comment-statistieken bijwerken (issue #30)
+- [ ] Frontend (login-scherm, overzicht, detail, instellingen) — nog te starten
