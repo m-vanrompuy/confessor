@@ -28,6 +28,11 @@ pub fn sheet_tab_name() -> String {
     std::env::var("SHEET_TAB_NAME").unwrap_or_else(|_| "Formulierreacties 1".to_string())
 }
 
+/// Naam van de Cloud Storage-bucket waar gerenderde afbeeldingen naartoe gaan.
+pub fn storage_bucket() -> String {
+    require_env("STORAGE_BUCKET")
+}
+
 /// Leest een verplichte omgevingsvariabele in, of stopt meteen met een duidelijke
 /// foutmelding — beter een vroege crash bij opstarten dan een vage fout later.
 fn require_env(name: &str) -> String {
