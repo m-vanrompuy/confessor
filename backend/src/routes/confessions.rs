@@ -16,6 +16,7 @@ use axum::Json;
 use axum::extract::Path;
 use axum::extract::Query;
 use axum::http::StatusCode;
+use axum::http::header;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -138,6 +139,37 @@ pub async fn generate_confession_images(
         .map_err(internal_error)?;
 
     Ok(Json(GenerateImagesResponse { slide_paths, suggested_caption }))
+}
+
+/// HTTP-handler voor GET /confessions/{id}/slides/{index}. Index is 1-based, zelfde
+/// nummering als in de storage-paden (slide-1.png, slide-2.png, ...). Streamt de
+/// PNG-bytes door de backend heen - geen signed URLs, dezelfde IAM-gate als de rest.
+pub async fn get_confession_slide(
+    Path((confession_id, slide_index)): Path<(String, usize)>,
+) -> Result<([(header::HeaderName, &'static str); 1], Vec<u8>), (StatusCode, String)> {
+    let db = firestore::make_firestore_client().await.map_err(internal_error)?;
+
+    let confession = fetch_confession_or_404(&db, &confession_id).await?;
+    let object_path = slide_path_or_404(&confession, slide_index)?;
+
+    let png_bytes = storage::download_object(object_path).await.map_err(internal_error)?;
+
+    Ok(([(header::CONTENT_TYPE, "image/png")], png_bytes))
+}
+
+fn slide_path_or_404(confession: &Confession, slide_index: usize) -> Result<&str, (StatusCode, String)> {
+    if slide_index == 0 {
+        return Err((StatusCode::BAD_REQUEST, "slide-index start bij 1".to_string()));
+    }
+
+    confession
+        .slide_paths
+        .get(slide_index - 1)
+        .map(String::as_str)
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            "slide niet gevonden (nog niet gegenereerd, of al opgeruimd)".to_string(),
+        ))
 }
 
 async fn fetch_confession_or_404(

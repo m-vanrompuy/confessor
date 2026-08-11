@@ -33,6 +33,31 @@ pub async fn upload_png(object_path: &str, png_bytes: Vec<u8>) -> Result<String,
     Ok(object_path.to_string())
 }
 
+/// Haalt de ruwe bytes van een object op, om ze door de backend heen te streamen
+/// naar de client (zie routes/confessions.rs get_confession_slide, issue #64).
+pub async fn download_object(object_path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let provider = gcp_auth::provider().await?;
+    let token = provider.token(&[SCOPE]).await?;
+
+    let bucket = config::storage_bucket();
+    let mut url = reqwest::Url::parse(&format!("https://storage.googleapis.com/storage/v1/b/{bucket}/o"))?;
+    url.path_segments_mut()
+        .map_err(|_| "kon storage-URL niet opbouwen")?
+        .push(object_path);
+    url.query_pairs_mut().append_pair("alt", "media");
+
+    let client = reqwest::Client::new();
+    let response = client.get(url).bearer_auth(token.as_str()).send().await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Cloud Storage download gaf status {status}: {body}").into());
+    }
+
+    Ok(response.bytes().await?.to_vec())
+}
+
 /// Verwijdert een object uit de bucket. Een object dat al weg is (404) telt ook als
 /// geslaagd - het gewenste eindresultaat ("bestaat niet meer") is toch bereikt.
 pub async fn delete_object(object_path: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -75,11 +100,16 @@ mod tests {
             0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
         ];
 
-        let result = upload_png("test/issue-28-smoke-test.png", one_pixel_png).await;
+        let result = upload_png("test/issue-28-smoke-test.png", one_pixel_png.clone()).await;
         assert!(result.is_ok(), "upload zou moeten lukken: {:?}", result.err());
         assert_eq!(result.unwrap(), "test/issue-28-smoke-test.png");
 
-        // Meteen weer opruimen, en meteen ook delete_object zelf verifiëren.
+        // Meteen ook download_object verifiëren: bytes moeten exact overeenkomen.
+        let downloaded = download_object("test/issue-28-smoke-test.png").await;
+        assert!(downloaded.is_ok(), "download zou moeten lukken: {:?}", downloaded.err());
+        assert_eq!(downloaded.unwrap(), one_pixel_png);
+
+        // Meteen weer opruimen.
         let delete_result = delete_object("test/issue-28-smoke-test.png").await;
         assert!(delete_result.is_ok(), "delete zou moeten lukken: {:?}", delete_result.err());
     }
