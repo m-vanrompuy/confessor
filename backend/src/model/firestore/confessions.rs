@@ -1,5 +1,6 @@
 use crate::business::dedupe::calculate_confession_id;
 use crate::model::sheets::RawConfessionRow;
+use chrono::{DateTime, Utc};
 use firestore::FirestoreDb;
 use firestore::paths;
 use firestore::path;
@@ -35,6 +36,10 @@ pub struct Confession {
     /// Storage-pad per gerenderde slide, op volgorde (index = slide-nummer).
     #[serde(default)]
     pub slide_paths: Vec<String>,
+    /// Wanneer de confession als "gebruikt" gemarkeerd werd - bepaalt samen met de
+    /// bewaartermijn-instelling wanneer de afbeeldingen opgeruimd worden (issue #61).
+    #[serde(default)]
+    pub used_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +87,7 @@ pub async fn save_confession(
         sequence_number: None,
         suggested_caption: None,
         slide_paths: Vec::new(),
+        used_at: None,
     };
 
     db.fluent()
@@ -180,6 +186,7 @@ pub async fn update_confession_tags(
         sequence_number: None,
         suggested_caption: None,
         slide_paths: Vec::new(),
+        used_at: None,
     };
 
     db.fluent()
@@ -212,6 +219,7 @@ pub async fn delete_confession(
         sequence_number: None,
         suggested_caption: None,
         slide_paths: Vec::new(),
+        used_at: None,
     };
 
     db.fluent()
@@ -244,6 +252,7 @@ pub async fn save_generated_images(
         sequence_number: None,
         suggested_caption: Some(suggested_caption.to_string()),
         slide_paths: slide_paths.to_vec(),
+        used_at: None,
     };
 
     db.fluent()
@@ -305,11 +314,46 @@ pub async fn mark_confession_as_used(
         sequence_number: Some(sequence_number),
         suggested_caption: None,
         slide_paths: Vec::new(),
+        used_at: Some(Utc::now()),
     };
 
     db.fluent()
         .update()
-        .fields(paths!(Confession::{status, sequence_number}))
+        .fields(paths!(Confession::{status, sequence_number, used_at}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
+/// Wist de slide-referenties nadat hun Storage-objecten opgeruimd zijn (issue #61).
+/// used_at blijft staan - dat is de historische "wanneer gepubliceerd"-info, geen
+/// vervaldatum om te resetten.
+pub async fn clear_slide_paths(
+    db: &FirestoreDb,
+    confession_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        id: String::new(),
+        timestamp: String::new(),
+        title: String::new(),
+        text: String::new(),
+        admin_message: None,
+        image_link: None,
+        status: String::new(),
+        tag_ids: Vec::new(),
+        sequence_number: None,
+        suggested_caption: None,
+        slide_paths: Vec::new(),
+        used_at: None,
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{slide_paths}))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)
