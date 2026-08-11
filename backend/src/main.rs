@@ -23,6 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .route("/sync", post(routes::sync::sync_confessions))
+        .route("/cleanup", post(routes::cleanup::cleanup_expired_images))
         .route("/confessions", get(routes::confessions::list_confessions))
         .route(
             "/confessions/{id}",

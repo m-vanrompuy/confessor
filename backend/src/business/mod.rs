@@ -7,3 +7,4 @@ pub mod tagging;
 pub mod tombstone;
 pub mod settings;
 pub mod caption;
+pub mod cleanup;

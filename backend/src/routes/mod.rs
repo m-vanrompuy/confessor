@@ -3,3 +3,4 @@ pub mod confessions;
 pub mod tags;
 pub mod settings;
 pub mod sync;
+pub mod cleanup;
