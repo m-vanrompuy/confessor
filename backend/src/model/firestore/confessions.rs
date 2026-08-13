@@ -46,6 +46,12 @@ pub struct Confession {
     pub comment_count: Option<u32>,
     #[serde(default)]
     pub stats_last_updated_at: Option<DateTime<Utc>>,
+    /// Onze eigen kopie van de meme/afbeelding uit `image_link` (issue #38b).
+    /// None zolang er geen `image_link` is, of die nog niet opgehaald is.
+    #[serde(default)]
+    pub meme_storage_path: Option<String>,
+    #[serde(default)]
+    pub meme_content_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -236,6 +242,32 @@ pub async fn save_generated_images(
     db.fluent()
         .update()
         .fields(paths!(Confession::{suggested_caption, slide_paths}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
+/// Slaat de eigen kopie van de meme op (issue #38b) nadat die van Drive gehaald en
+/// naar Storage geüpload is.
+pub async fn save_meme(
+    db: &FirestoreDb,
+    confession_id: &str,
+    meme_storage_path: &str,
+    meme_content_type: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        meme_storage_path: Some(meme_storage_path.to_string()),
+        meme_content_type: Some(meme_content_type.to_string()),
+        ..Default::default()
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{meme_storage_path, meme_content_type}))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)

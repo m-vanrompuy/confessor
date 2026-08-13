@@ -5,6 +5,7 @@ use crate::business::numbering::determine_next_sequence_number;
 use crate::business::tagging::dedupe_tag_ids;
 use crate::business::template::{split_text_into_slides, wrap_paragraph_into_lines};
 use crate::business::tombstone::build_tombstoned_content;
+use crate::model::drive;
 use crate::model::firestore;
 use crate::model::firestore::Confession;
 use crate::model::firestore::ConfessionStatus;
@@ -138,10 +139,14 @@ pub async fn update_confession_stats(
 pub struct GenerateImagesResponse {
     slide_paths: Vec<String>,
     suggested_caption: String,
+    /// None als er geen meme was, of als het ophalen mislukte - dat mag de rest
+    /// van het genereren niet blokkeren (zie ensure_meme_stored).
+    meme_storage_path: Option<String>,
 }
 
 /// HTTP-handler voor POST /confessions/{id}/generate. Verdeelt de tekst over slides,
-/// rendert elke slide naar PNG, uploadt ze, en stelt een caption voor.
+/// rendert elke slide naar PNG, uploadt ze, stelt een caption voor, en haalt best-effort
+/// de meme op (issue #38b) als die er is en nog niet eerder opgehaald werd.
 pub async fn generate_confession_images(
     Path(confession_id): Path<String>,
 ) -> Result<Json<GenerateImagesResponse>, (StatusCode, String)> {
@@ -161,7 +166,44 @@ pub async fn generate_confession_images(
         .await
         .map_err(internal_error)?;
 
-    Ok(Json(GenerateImagesResponse { slide_paths, suggested_caption }))
+    let meme_storage_path = ensure_meme_stored(&db, &confession).await;
+
+    Ok(Json(GenerateImagesResponse { slide_paths, suggested_caption, meme_storage_path }))
+}
+
+/// Haalt de meme op van Drive en slaat een eigen kopie op, als er een `image_link` is
+/// en dat nog niet eerder gebeurd is. Bewust best-effort: een kapotte/ontoegankelijke
+/// Drive-link mag de rest van het genereren niet laten falen, enkel loggen en verdergaan.
+async fn ensure_meme_stored(db: &::firestore::FirestoreDb, confession: &Confession) -> Option<String> {
+    if confession.meme_storage_path.is_some() {
+        return confession.meme_storage_path.clone();
+    }
+
+    let drive_link = confession.image_link.as_ref()?;
+    let file_id = drive::extract_file_id(drive_link)?;
+
+    match fetch_and_store_meme(db, &confession.id, &file_id).await {
+        Ok(storage_path) => Some(storage_path),
+        Err(error) => {
+            eprintln!("meme ophalen mislukt voor confession {}: {error}", confession.id);
+            None
+        }
+    }
+}
+
+async fn fetch_and_store_meme(
+    db: &::firestore::FirestoreDb,
+    confession_id: &str,
+    file_id: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let file = drive::download_file(file_id).await?;
+    let extension = drive::extension_for_content_type(&file.content_type);
+    let object_path = format!("confessions/{confession_id}/meme.{extension}");
+
+    let storage_path = storage::upload_object(&object_path, file.bytes, &file.content_type).await?;
+    firestore::save_meme(db, confession_id, &storage_path, &file.content_type).await?;
+
+    Ok(storage_path)
 }
 
 /// HTTP-handler voor GET /confessions/{id}/slides/{index}. Index is 1-based, zelfde
