@@ -4,10 +4,13 @@ use crate::config;
 
 const SCOPE: &str = "https://www.googleapis.com/auth/devstorage.read_write";
 
-/// Uploadt PNG-bytes naar de bucket onder `object_path`, en geeft dat pad terug
-/// zodat de caller het kan opslaan als `storage_path` op een Slide-document.
-/// Beslist zelf niets over de padstructuur - dat is aan de caller.
-pub async fn upload_png(object_path: &str, png_bytes: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+/// Uploadt bytes naar de bucket onder `object_path` met de gegeven content-type, en
+/// geeft dat pad terug. Beslist zelf niets over de padstructuur - dat is aan de caller.
+pub async fn upload_object(
+    object_path: &str,
+    bytes: Vec<u8>,
+    content_type: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
     let provider = gcp_auth::provider().await?;
     let token = provider.token(&[SCOPE]).await?;
 
@@ -19,8 +22,8 @@ pub async fn upload_png(object_path: &str, png_bytes: Vec<u8>) -> Result<String,
         .post(&url)
         .query(&[("uploadType", "media"), ("name", object_path)])
         .bearer_auth(token.as_str())
-        .header("Content-Type", "image/png")
-        .body(png_bytes)
+        .header("Content-Type", content_type)
+        .body(bytes)
         .send()
         .await?;
 
@@ -31,6 +34,11 @@ pub async fn upload_png(object_path: &str, png_bytes: Vec<u8>) -> Result<String,
     }
 
     Ok(object_path.to_string())
+}
+
+/// Gemakslaag voor het specifieke geval van een gerenderde slide - altijd PNG.
+pub async fn upload_png(object_path: &str, png_bytes: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+    upload_object(object_path, png_bytes, "image/png").await
 }
 
 /// Haalt de ruwe bytes van een object op, om ze door de backend heen te streamen

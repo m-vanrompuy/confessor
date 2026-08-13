@@ -3,3 +3,4 @@ pub mod sheets;
 pub mod firestore;
 pub mod storage;
 pub mod image_render;
+pub mod drive;

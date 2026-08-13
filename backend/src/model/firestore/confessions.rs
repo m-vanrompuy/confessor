@@ -46,6 +46,18 @@ pub struct Confession {
     pub comment_count: Option<u32>,
     #[serde(default)]
     pub stats_last_updated_at: Option<DateTime<Utc>>,
+    /// Onze eigen kopie(ën) van de meme(s) uit `image_link` (issue #38b). Meestal één,
+    /// maar Google Forms staat toe dat een vraag meerdere bestanden per antwoord
+    /// toelaat, dus dit is een lijst. Leeg zolang er geen `image_link` is, of die nog
+    /// niet opgehaald is.
+    #[serde(default)]
+    pub meme_attachments: Vec<MemeAttachment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemeAttachment {
+    pub storage_path: String,
+    pub content_type: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -236,6 +248,30 @@ pub async fn save_generated_images(
     db.fluent()
         .update()
         .fields(paths!(Confession::{suggested_caption, slide_paths}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
+/// Slaat de eigen kopie(ën) van de meme(s) op (issue #38b) nadat die van Drive
+/// gehaald en naar Storage geüpload zijn.
+pub async fn save_memes(
+    db: &FirestoreDb,
+    confession_id: &str,
+    meme_attachments: Vec<MemeAttachment>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        meme_attachments,
+        ..Default::default()
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{meme_attachments}))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)
