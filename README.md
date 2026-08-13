@@ -249,6 +249,7 @@ kuleuven-confessions-tool/
 - Service-account sleutel (`.json`) **nooit** in git committen — zie `.gitignore`
 - Service-account heeft enkel leesrechten, geen schrijf/verwijderrechten op de Sheet
 - Het Sheet-ID zelf is geen geheim en mag gedeeld worden; de sleutel (`private_key`) wél altijd geheim houden
+- **Least privilege**: `kul-confessions@` stond tijdelijk op Owner (nodig om alles te activeren), nu teruggebracht tot enkel `roles/datastore.user` op projectniveau, plus `roles/storage.objectAdmin` (enkel op de eigen bucket) en `roles/run.invoker` (enkel op `confessor-backend`) — allebei al eerder resource-specifiek toegekend. Sheets/Drive-toegang loopt sowieso niet via IAM maar via het delen van de Sheet/map zelf. Geverifieerd tegen de live Cloud Run-service: Firestore, Storage, cleanup en Sheets-sync werken allemaal nog correct met deze beperkte rechten.
 
 ## Deployment
 
