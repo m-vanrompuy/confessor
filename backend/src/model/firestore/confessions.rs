@@ -18,7 +18,7 @@ struct ConfessionIdOnly {
     id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Confession {
     pub id: String,
     pub timestamp: String,
@@ -40,6 +40,12 @@ pub struct Confession {
     /// bewaartermijn-instelling wanneer de afbeeldingen opgeruimd worden (issue #61).
     #[serde(default)]
     pub used_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub like_count: Option<u32>,
+    #[serde(default)]
+    pub comment_count: Option<u32>,
+    #[serde(default)]
+    pub stats_last_updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,11 +89,7 @@ pub async fn save_confession(
         admin_message: row.admin_message.clone(),
         image_link: row.image_link.clone(),
         status: "new".to_string(),
-        tag_ids: Vec::new(),
-        sequence_number: None,
-        suggested_caption: None,
-        slide_paths: Vec::new(),
-        used_at: None,
+        ..Default::default()
     };
 
     db.fluent()
@@ -175,18 +177,8 @@ pub async fn update_confession_tags(
     tag_ids: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
-        id: String::new(),
-        timestamp: String::new(),
-        title: String::new(),
-        text: String::new(),
-        admin_message: None,
-        image_link: None,
-        status: String::new(),
         tag_ids: tag_ids.to_vec(),
-        sequence_number: None,
-        suggested_caption: None,
-        slide_paths: Vec::new(),
-        used_at: None,
+        ..Default::default()
     };
 
     db.fluent()
@@ -208,18 +200,13 @@ pub async fn delete_confession(
     tombstoned_content: crate::business::tombstone::TombstonedContent,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
-        id: String::new(),
-        timestamp: String::new(),
         title: tombstoned_content.title,
         text: tombstoned_content.text,
         admin_message: tombstoned_content.admin_message,
         image_link: tombstoned_content.image_link,
         status: tombstoned_content.status,
         tag_ids: tombstoned_content.tag_ids,
-        sequence_number: None,
-        suggested_caption: None,
-        slide_paths: Vec::new(),
-        used_at: None,
+        ..Default::default()
     };
 
     db.fluent()
@@ -241,18 +228,9 @@ pub async fn save_generated_images(
     suggested_caption: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
-        id: String::new(),
-        timestamp: String::new(),
-        title: String::new(),
-        text: String::new(),
-        admin_message: None,
-        image_link: None,
-        status: String::new(),
-        tag_ids: Vec::new(),
-        sequence_number: None,
         suggested_caption: Some(suggested_caption.to_string()),
         slide_paths: slide_paths.to_vec(),
-        used_at: None,
+        ..Default::default()
     };
 
     db.fluent()
@@ -303,18 +281,10 @@ pub async fn mark_confession_as_used(
     sequence_number: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
-        id: String::new(),
-        timestamp: String::new(),
-        title: String::new(),
-        text: String::new(),
-        admin_message: None,
-        image_link: None,
         status: "used".to_string(),
-        tag_ids: Vec::new(),
         sequence_number: Some(sequence_number),
-        suggested_caption: None,
-        slide_paths: Vec::new(),
         used_at: Some(Utc::now()),
+        ..Default::default()
     };
 
     db.fluent()
@@ -336,24 +306,38 @@ pub async fn clear_slide_paths(
     db: &FirestoreDb,
     confession_id: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let placeholder_confession = Confession {
-        id: String::new(),
-        timestamp: String::new(),
-        title: String::new(),
-        text: String::new(),
-        admin_message: None,
-        image_link: None,
-        status: String::new(),
-        tag_ids: Vec::new(),
-        sequence_number: None,
-        suggested_caption: None,
-        slide_paths: Vec::new(),
-        used_at: None,
-    };
+    let placeholder_confession = Confession::default();
 
     db.fluent()
         .update()
         .fields(paths!(Confession::{slide_paths}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
+/// Werkt like/comment-aantallen manueel bij (issue #30). stats_last_updated_at wordt
+/// automatisch gezet - niet iets wat de admin zelf invult.
+pub async fn update_confession_stats(
+    db: &FirestoreDb,
+    confession_id: &str,
+    like_count: u32,
+    comment_count: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        like_count: Some(like_count),
+        comment_count: Some(comment_count),
+        stats_last_updated_at: Some(Utc::now()),
+        ..Default::default()
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{like_count, comment_count, stats_last_updated_at}))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)

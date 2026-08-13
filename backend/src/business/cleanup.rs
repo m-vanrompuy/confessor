@@ -37,17 +37,11 @@ mod tests {
     fn confession_used_days_ago(days_ago: i64, now: DateTime<Utc>) -> Confession {
         Confession {
             id: "test-id".to_string(),
-            timestamp: String::new(),
-            title: String::new(),
-            text: String::new(),
-            admin_message: None,
-            image_link: None,
             status: "used".to_string(),
-            tag_ids: Vec::new(),
             sequence_number: Some(1),
-            suggested_caption: None,
             slide_paths: vec!["confessions/test-id/slide-1.png".to_string()],
             used_at: Some(now - Duration::days(days_ago)),
+            ..Default::default()
         }
     }
 
