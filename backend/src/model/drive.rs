@@ -37,9 +37,19 @@ pub async fn download_file(file_id: &str) -> Result<DriveFile, Box<dyn std::erro
     Ok(DriveFile { bytes, content_type })
 }
 
-/// Haalt het bestands-ID uit een link zoals "https://drive.google.com/open?id=XXXX"
-/// (het formaat dat Google Forms gebruikt voor geüploade bestanden).
-pub fn extract_file_id(drive_link: &str) -> Option<String> {
+/// Haalt alle bestands-ID's uit een `image_link`-veld. Meestal is dat één link zoals
+/// "https://drive.google.com/open?id=XXXX", maar Google Forms staat toe dat een
+/// formulier-vraag meerdere bestanden per antwoord toelaat - dan komen er meerdere,
+/// komma-gescheiden links in hetzelfde veld terecht (in de praktijk zo'n 7,5% van de
+/// confessions met een bijlage, soms wel 5 bestanden in één antwoord).
+pub fn extract_file_ids(image_link_field: &str) -> Vec<String> {
+    image_link_field
+        .split(',')
+        .filter_map(|link| extract_file_id(link.trim()))
+        .collect()
+}
+
+fn extract_file_id(drive_link: &str) -> Option<String> {
     let url = reqwest::Url::parse(drive_link).ok()?;
     url.query_pairs()
         .find(|(key, _)| key == "id")
@@ -63,15 +73,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extracts_id_from_form_upload_link() {
-        let link = "https://drive.google.com/open?id=1vQTF5jdBRUuzk9WXPTDQ0x_UjBAC_963";
-        assert_eq!(extract_file_id(link), Some("1vQTF5jdBRUuzk9WXPTDQ0x_UjBAC_963".to_string()));
+    fn extracts_a_single_id_from_a_form_upload_link() {
+        let field = "https://drive.google.com/open?id=1vQTF5jdBRUuzk9WXPTDQ0x_UjBAC_963";
+        assert_eq!(extract_file_ids(field), vec!["1vQTF5jdBRUuzk9WXPTDQ0x_UjBAC_963".to_string()]);
     }
 
     #[test]
-    fn returns_none_for_a_link_without_an_id() {
-        let link = "https://drive.google.com/drive/folders/some-folder";
-        assert_eq!(extract_file_id(link), None);
+    fn extracts_multiple_ids_from_a_comma_separated_field() {
+        let field = "https://drive.google.com/open?id=AAA, https://drive.google.com/open?id=BBB";
+        assert_eq!(extract_file_ids(field), vec!["AAA".to_string(), "BBB".to_string()]);
+    }
+
+    #[test]
+    fn returns_empty_for_a_field_without_any_id() {
+        let field = "https://drive.google.com/drive/folders/some-folder";
+        assert_eq!(extract_file_ids(field), Vec::<String>::new());
     }
 
     #[test]
@@ -85,9 +101,8 @@ mod tests {
         assert_eq!(extension_for_content_type("application/pdf"), "bin");
     }
 
-    /// Tijdelijke, handmatig te draaien check tegen een echte, bestaande upload -
-    /// bevestigt dat het service-account effectief leestoegang heeft tot de
-    /// Drive-map (issue #38b se open ontwerpvraag over Drive-toegang).
+    /// Handmatig te draaien check tegen echte, bestaande uploads - bevestigt dat het
+    /// service-account effectief leestoegang heeft tot de Drive-map.
     #[tokio::test]
     #[ignore]
     async fn can_download_a_real_confession_attachment() {

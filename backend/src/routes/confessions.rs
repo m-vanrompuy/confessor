@@ -139,14 +139,15 @@ pub async fn update_confession_stats(
 pub struct GenerateImagesResponse {
     slide_paths: Vec<String>,
     suggested_caption: String,
-    /// None als er geen meme was, of als het ophalen mislukte - dat mag de rest
-    /// van het genereren niet blokkeren (zie ensure_meme_stored).
-    meme_storage_path: Option<String>,
+    /// Leeg als er geen meme was, of als het ophalen volledig mislukte - dat mag de
+    /// rest van het genereren niet blokkeren (zie ensure_memes_stored). Meestal 1,
+    /// kan er meerdere zijn als het formulier-antwoord meerdere bestanden bevatte.
+    meme_storage_paths: Vec<String>,
 }
 
 /// HTTP-handler voor POST /confessions/{id}/generate. Verdeelt de tekst over slides,
 /// rendert elke slide naar PNG, uploadt ze, stelt een caption voor, en haalt best-effort
-/// de meme op (issue #38b) als die er is en nog niet eerder opgehaald werd.
+/// de meme(s) op (issue #38b) als die er zijn en nog niet eerder opgehaald werden.
 pub async fn generate_confession_images(
     Path(confession_id): Path<String>,
 ) -> Result<Json<GenerateImagesResponse>, (StatusCode, String)> {
@@ -166,44 +167,56 @@ pub async fn generate_confession_images(
         .await
         .map_err(internal_error)?;
 
-    let meme_storage_path = ensure_meme_stored(&db, &confession).await;
+    let meme_storage_paths = ensure_memes_stored(&db, &confession).await;
 
-    Ok(Json(GenerateImagesResponse { slide_paths, suggested_caption, meme_storage_path }))
+    Ok(Json(GenerateImagesResponse { slide_paths, suggested_caption, meme_storage_paths }))
 }
 
-/// Haalt de meme op van Drive en slaat een eigen kopie op, als er een `image_link` is
-/// en dat nog niet eerder gebeurd is. Bewust best-effort: een kapotte/ontoegankelijke
-/// Drive-link mag de rest van het genereren niet laten falen, enkel loggen en verdergaan.
-async fn ensure_meme_stored(db: &::firestore::FirestoreDb, confession: &Confession) -> Option<String> {
-    if confession.meme_storage_path.is_some() {
-        return confession.meme_storage_path.clone();
+/// Haalt de meme(s) op van Drive en slaat eigen kopieën op, als er een `image_link` is
+/// en dat nog niet eerder gebeurd is. Bewust best-effort per bestand: één kapotte/
+/// ontoegankelijke link in een antwoord met meerdere bestanden mag de andere, wel
+/// geslaagde bestanden niet blokkeren - enkel loggen en verdergaan.
+async fn ensure_memes_stored(db: &::firestore::FirestoreDb, confession: &Confession) -> Vec<String> {
+    if !confession.meme_attachments.is_empty() {
+        return confession.meme_attachments.iter().map(|meme| meme.storage_path.clone()).collect();
     }
 
-    let drive_link = confession.image_link.as_ref()?;
-    let file_id = drive::extract_file_id(drive_link)?;
+    let Some(drive_link) = confession.image_link.as_ref() else {
+        return Vec::new();
+    };
+    let file_ids = drive::extract_file_ids(drive_link);
 
-    match fetch_and_store_meme(db, &confession.id, &file_id).await {
-        Ok(storage_path) => Some(storage_path),
-        Err(error) => {
-            eprintln!("meme ophalen mislukt voor confession {}: {error}", confession.id);
-            None
+    let mut attachments = Vec::new();
+    for (index, file_id) in file_ids.iter().enumerate() {
+        match fetch_and_store_meme(&confession.id, index, file_id).await {
+            Ok(attachment) => attachments.push(attachment),
+            Err(error) => eprintln!("meme ophalen mislukt voor confession {} ({file_id}): {error}", confession.id),
         }
     }
+
+    if !attachments.is_empty() {
+        let storage_paths: Vec<String> = attachments.iter().map(|a| a.storage_path.clone()).collect();
+        if let Err(error) = firestore::save_memes(db, &confession.id, attachments).await {
+            eprintln!("meme-referenties opslaan mislukt voor confession {}: {error}", confession.id);
+        }
+        return storage_paths;
+    }
+
+    Vec::new()
 }
 
 async fn fetch_and_store_meme(
-    db: &::firestore::FirestoreDb,
     confession_id: &str,
+    index: usize,
     file_id: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<firestore::MemeAttachment, Box<dyn std::error::Error>> {
     let file = drive::download_file(file_id).await?;
     let extension = drive::extension_for_content_type(&file.content_type);
-    let object_path = format!("confessions/{confession_id}/meme.{extension}");
+    let object_path = format!("confessions/{confession_id}/meme-{}.{extension}", index + 1);
 
     let storage_path = storage::upload_object(&object_path, file.bytes, &file.content_type).await?;
-    firestore::save_meme(db, confession_id, &storage_path, &file.content_type).await?;
 
-    Ok(storage_path)
+    Ok(firestore::MemeAttachment { storage_path, content_type: file.content_type })
 }
 
 /// HTTP-handler voor GET /confessions/{id}/slides/{index}. Index is 1-based, zelfde
