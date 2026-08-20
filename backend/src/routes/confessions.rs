@@ -11,6 +11,8 @@ use crate::model::firestore::Confession;
 use crate::model::firestore::ConfessionStatus;
 use crate::model::firestore::TemplateConfig;
 use crate::model::image_render;
+use crate::model::image_render::MemeInput;
+use crate::model::image_render::MemePosition;
 use crate::model::image_render::SlideRenderInput;
 use crate::model::storage;
 use axum::Json;
@@ -135,31 +137,71 @@ pub async fn update_confession_stats(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Deserialize)]
+pub struct GenerateImagesQuery {
+    /// "before" of "after" - waar de meme t.o.v. de tekst komt te staan op de slide
+    /// die 'm krijgt (zie choose_meme_position). Default: "after".
+    meme_position: Option<String>,
+    /// 1.0 = standaardgrootte, geclamped tussen MEME_SCALE_MIN/MAX (zie
+    /// choose_meme_scale). Default: 1.0.
+    meme_scale: Option<f64>,
+}
+
+/// Alles wat nodig is om de meme in één specifieke slide te componeren - gebundeld
+/// i.p.v. een groeiende tuple, wordt gewoon doorgegeven aan render_and_upload_slides.
+#[derive(Clone, Copy)]
+struct MemeCompositing<'a> {
+    bytes: &'a [u8],
+    content_type: &'a str,
+    position: MemePosition,
+    scale: f64,
+}
+
 #[derive(Serialize)]
 pub struct GenerateImagesResponse {
     slide_paths: Vec<String>,
     suggested_caption: String,
     /// Leeg als er geen meme was, of als het ophalen volledig mislukte - dat mag de
     /// rest van het genereren niet blokkeren (zie ensure_memes_stored). Meestal 1,
-    /// kan er meerdere zijn als het formulier-antwoord meerdere bestanden bevatte.
+    /// kan er meerdere zijn als het formulier-antwoord meerdere bestanden bevatte -
+    /// enkel de eerste wordt effectief in een slide gecomponeerd (issue #65, v1).
     meme_storage_paths: Vec<String>,
 }
 
 /// HTTP-handler voor POST /confessions/{id}/generate. Verdeelt de tekst over slides,
-/// rendert elke slide naar PNG, uploadt ze, stelt een caption voor, en haalt best-effort
-/// de meme(s) op (issue #38b) als die er zijn en nog niet eerder opgehaald werden.
+/// rendert elke slide naar PNG (de eerste meme, indien aanwezig, gecomponeerd in de
+/// laatste slide), uploadt ze, stelt een caption voor, en haalt best-effort de
+/// meme(s) op (issue #38b) als die er zijn en nog niet eerder opgehaald werden.
 pub async fn generate_confession_images(
     Path(confession_id): Path<String>,
+    Query(query): Query<GenerateImagesQuery>,
 ) -> Result<Json<GenerateImagesResponse>, (StatusCode, String)> {
     let db = firestore::make_firestore_client().await.map_err(internal_error)?;
 
     let confession = fetch_confession_or_404(&db, &confession_id).await?;
     let sequence_number = require_sequence_number(&confession)?;
     let template_config = fetch_template_config_or_error(&db).await?;
+    let meme_position = choose_meme_position(&query.meme_position);
+    let meme_scale = choose_meme_scale(query.meme_scale);
 
-    let slide_paths = render_and_upload_slides(&confession_id, &confession.text, sequence_number, &template_config)
-        .await
-        .map_err(internal_error)?;
+    let memes = ensure_memes_stored(&db, &confession).await;
+    let meme_bytes = load_first_meme_bytes(&memes).await;
+    let meme_for_compositing = meme_bytes.as_ref().map(|(bytes, content_type)| MemeCompositing {
+        bytes: bytes.as_slice(),
+        content_type: content_type.as_str(),
+        position: meme_position,
+        scale: meme_scale,
+    });
+
+    let slide_paths = render_and_upload_slides(
+        &confession_id,
+        &confession.text,
+        sequence_number,
+        &template_config,
+        meme_for_compositing,
+    )
+    .await
+    .map_err(internal_error)?;
 
     let suggested_caption = caption::suggest_caption(sequence_number, &confession.text, CAPTION_TEASER_MAX_LENGTH);
 
@@ -167,18 +209,48 @@ pub async fn generate_confession_images(
         .await
         .map_err(internal_error)?;
 
-    let meme_storage_paths = ensure_memes_stored(&db, &confession).await;
+    let meme_storage_paths = memes.into_iter().map(|meme| meme.storage_path).collect();
 
     Ok(Json(GenerateImagesResponse { slide_paths, suggested_caption, meme_storage_paths }))
+}
+
+fn choose_meme_position(requested: &Option<String>) -> MemePosition {
+    match requested.as_deref() {
+        Some("before") => MemePosition::Before,
+        _ => MemePosition::After,
+    }
+}
+
+/// Clampt naar image_render::MEME_SCALE_MIN/MAX - beschermt tegen een onleesbaar
+/// kleine of kaart-overschrijdend grote meme via een geknoeide query-param.
+fn choose_meme_scale(requested: Option<f64>) -> f64 {
+    requested
+        .unwrap_or(1.0)
+        .clamp(image_render::MEME_SCALE_MIN, image_render::MEME_SCALE_MAX)
+}
+
+/// Downloadt de bytes van de eerste meme uit Storage, zodat ze in de SVG gecomponeerd
+/// kunnen worden. Best-effort: als de download faalt (object toch weg, netwerkfout),
+/// wordt er gewoon zonder meme gerenderd i.p.v. het hele genereren te laten falen.
+async fn load_first_meme_bytes(memes: &[firestore::MemeAttachment]) -> Option<(Vec<u8>, String)> {
+    let first_meme = memes.first()?;
+
+    match storage::download_object(&first_meme.storage_path).await {
+        Ok(bytes) => Some((bytes, first_meme.content_type.clone())),
+        Err(error) => {
+            eprintln!("meme downloaden voor compositing mislukt ({}): {error}", first_meme.storage_path);
+            None
+        }
+    }
 }
 
 /// Haalt de meme(s) op van Drive en slaat eigen kopieën op, als er een `image_link` is
 /// en dat nog niet eerder gebeurd is. Bewust best-effort per bestand: één kapotte/
 /// ontoegankelijke link in een antwoord met meerdere bestanden mag de andere, wel
 /// geslaagde bestanden niet blokkeren - enkel loggen en verdergaan.
-async fn ensure_memes_stored(db: &::firestore::FirestoreDb, confession: &Confession) -> Vec<String> {
+async fn ensure_memes_stored(db: &::firestore::FirestoreDb, confession: &Confession) -> Vec<firestore::MemeAttachment> {
     if !confession.meme_attachments.is_empty() {
-        return confession.meme_attachments.iter().map(|meme| meme.storage_path.clone()).collect();
+        return confession.meme_attachments.clone();
     }
 
     let Some(drive_link) = confession.image_link.as_ref() else {
@@ -195,14 +267,12 @@ async fn ensure_memes_stored(db: &::firestore::FirestoreDb, confession: &Confess
     }
 
     if !attachments.is_empty() {
-        let storage_paths: Vec<String> = attachments.iter().map(|a| a.storage_path.clone()).collect();
-        if let Err(error) = firestore::save_memes(db, &confession.id, attachments).await {
+        if let Err(error) = firestore::save_memes(db, &confession.id, attachments.clone()).await {
             eprintln!("meme-referenties opslaan mislukt voor confession {}: {error}", confession.id);
         }
-        return storage_paths;
     }
 
-    Vec::new()
+    attachments
 }
 
 async fn fetch_and_store_meme(
@@ -281,17 +351,24 @@ async fn fetch_template_config_or_error(
 
 /// Verdeelt de tekst over slides, rendert en uploadt elke slide, en geeft de
 /// storage-paden terug op volgorde.
+/// `meme` (bytes, content-type, positie) wordt enkel gecomponeerd in de LÁÁTSTE
+/// slide - meme als afsluitende visual, consistent met hoe KUL Confessions dit zelf
+/// doet (zie referentiebeeld bij issue #65). Andere slides blijven pure tekst.
 async fn render_and_upload_slides(
     confession_id: &str,
     text: &str,
     sequence_number: u32,
     template_config: &TemplateConfig,
+    meme: Option<MemeCompositing<'_>>,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let slide_texts = split_text_into_slides(text, template_config.max_chars_per_slide as usize);
     let max_chars_per_line = image_render::max_chars_per_line(template_config.font_size);
+    let last_slide_index = slide_texts.len().saturating_sub(1);
 
     let mut slide_paths = Vec::new();
     for (index, slide_text) in slide_texts.iter().enumerate() {
+        let meme_for_this_slide = if index == last_slide_index { meme } else { None };
+
         let path = render_and_upload_one_slide(
             confession_id,
             index,
@@ -299,6 +376,7 @@ async fn render_and_upload_slides(
             sequence_number,
             template_config,
             max_chars_per_line,
+            meme_for_this_slide,
         )
         .await?;
         slide_paths.push(path);
@@ -314,14 +392,17 @@ async fn render_and_upload_one_slide(
     sequence_number: u32,
     template_config: &TemplateConfig,
     max_chars_per_line: usize,
+    meme: Option<MemeCompositing<'_>>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let lines = wrap_paragraph_into_lines(slide_text, max_chars_per_line);
+    let meme_input = meme.map(|m| MemeInput { bytes: m.bytes, content_type: m.content_type, position: m.position, scale: m.scale });
     let render_input = SlideRenderInput {
         lines: &lines,
         sequence_number,
         font_family: &template_config.font_family,
         font_size: template_config.font_size,
         text_color: &template_config.text_color,
+        meme: meme_input,
     };
 
     let png_bytes = image_render::render_slide_to_png(&render_input)?;
