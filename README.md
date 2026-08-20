@@ -228,6 +228,7 @@ kuleuven-confessions-tool/
         │   ├── templates/       # paginalay-outs zonder echte data
         │   └── pages/           # Overzicht, Detail, Instellingen
         └── api/
+            ├── client.ts        # gedeelde fetch-helper (basis-URL, IAP-sessiecookie, errors)
             └── confessions.ts   # fetch-aanroepen naar de Rust-backend (Cloud Run-URL)
 ```
 
@@ -245,7 +246,8 @@ kuleuven-confessions-tool/
 
 ## Beveiliging
 
-- Eén gedeeld wachtwoord voor toegang tot de webapp
+- Toegang tot de webapp via Google **Identity-Aware Proxy** — enkel toegestane Google-accounts
+  kunnen ermee inloggen, geen gedeeld wachtwoord (zie issue #31 in ISSUES.md voor de afweging)
 - Service-account sleutel (`.json`) **nooit** in git committen — zie `.gitignore`
 - Service-account heeft enkel leesrechten, geen schrijf/verwijderrechten op de Sheet
 - Het Sheet-ID zelf is geen geheim en mag gedeeld worden; de sleutel (`private_key`) wél altijd geheim houden
@@ -255,7 +257,9 @@ kuleuven-confessions-tool/
 
 - **Service:** `confessor-backend`, Cloud Run, regio `europe-west1` (zelfde regio als Firestore)
 - **Herdeployen:** `backend/deploy.sh [tag]` — bouwt de image (linux/amd64, ook vanaf Apple Silicon), pusht naar Artifact Registry, deployt naar Cloud Run
-- **Toegang:** momenteel `--no-allow-unauthenticated` (IAM-gated) — er is nog geen wachtwoord-scherm (issue #31), dus de service staat bewust **niet** publiek open. Pas naar `--allow-unauthenticated` zetten zodra dat scherm bestaat, niet eerder.
+- **Toegang:** `--no-allow-unauthenticated` (IAM-gated) — blijft zo. Wordt **niet** naar
+  `--allow-unauthenticated` gezet: toegang loopt via Identity-Aware Proxy vóór de service, met een
+  lijst toegestane Google-accounts (issue #31), niet via een publiek-open API.
 - **Auth:** de service draait onder het bestaande `kul-confessions@`-service-account (ADC via Cloud Run's gekoppelde identiteit, zie issue #9 — geen sleutelbestand in de container)
 
 ## Status & volgende stappen
