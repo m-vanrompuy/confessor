@@ -142,6 +142,19 @@ pub struct GenerateImagesQuery {
     /// "before" of "after" - waar de meme t.o.v. de tekst komt te staan op de slide
     /// die 'm krijgt (zie choose_meme_position). Default: "after".
     meme_position: Option<String>,
+    /// 1.0 = standaardgrootte, geclamped tussen MEME_SCALE_MIN/MAX (zie
+    /// choose_meme_scale). Default: 1.0.
+    meme_scale: Option<f64>,
+}
+
+/// Alles wat nodig is om de meme in één specifieke slide te componeren - gebundeld
+/// i.p.v. een groeiende tuple, wordt gewoon doorgegeven aan render_and_upload_slides.
+#[derive(Clone, Copy)]
+struct MemeCompositing<'a> {
+    bytes: &'a [u8],
+    content_type: &'a str,
+    position: MemePosition,
+    scale: f64,
 }
 
 #[derive(Serialize)]
@@ -169,16 +182,23 @@ pub async fn generate_confession_images(
     let sequence_number = require_sequence_number(&confession)?;
     let template_config = fetch_template_config_or_error(&db).await?;
     let meme_position = choose_meme_position(&query.meme_position);
+    let meme_scale = choose_meme_scale(query.meme_scale);
 
     let memes = ensure_memes_stored(&db, &confession).await;
-    let meme_for_compositing = load_first_meme_bytes(&memes).await;
+    let meme_bytes = load_first_meme_bytes(&memes).await;
+    let meme_for_compositing = meme_bytes.as_ref().map(|(bytes, content_type)| MemeCompositing {
+        bytes: bytes.as_slice(),
+        content_type: content_type.as_str(),
+        position: meme_position,
+        scale: meme_scale,
+    });
 
     let slide_paths = render_and_upload_slides(
         &confession_id,
         &confession.text,
         sequence_number,
         &template_config,
-        meme_for_compositing.as_ref().map(|(bytes, content_type)| (bytes.as_slice(), content_type.as_str(), meme_position)),
+        meme_for_compositing,
     )
     .await
     .map_err(internal_error)?;
@@ -199,6 +219,14 @@ fn choose_meme_position(requested: &Option<String>) -> MemePosition {
         Some("before") => MemePosition::Before,
         _ => MemePosition::After,
     }
+}
+
+/// Clampt naar image_render::MEME_SCALE_MIN/MAX - beschermt tegen een onleesbaar
+/// kleine of kaart-overschrijdend grote meme via een geknoeide query-param.
+fn choose_meme_scale(requested: Option<f64>) -> f64 {
+    requested
+        .unwrap_or(1.0)
+        .clamp(image_render::MEME_SCALE_MIN, image_render::MEME_SCALE_MAX)
 }
 
 /// Downloadt de bytes van de eerste meme uit Storage, zodat ze in de SVG gecomponeerd
@@ -331,7 +359,7 @@ async fn render_and_upload_slides(
     text: &str,
     sequence_number: u32,
     template_config: &TemplateConfig,
-    meme: Option<(&[u8], &str, MemePosition)>,
+    meme: Option<MemeCompositing<'_>>,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let slide_texts = split_text_into_slides(text, template_config.max_chars_per_slide as usize);
     let max_chars_per_line = image_render::max_chars_per_line(template_config.font_size);
@@ -364,10 +392,10 @@ async fn render_and_upload_one_slide(
     sequence_number: u32,
     template_config: &TemplateConfig,
     max_chars_per_line: usize,
-    meme: Option<(&[u8], &str, MemePosition)>,
+    meme: Option<MemeCompositing<'_>>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let lines = wrap_paragraph_into_lines(slide_text, max_chars_per_line);
-    let meme_input = meme.map(|(bytes, content_type, position)| MemeInput { bytes, content_type, position });
+    let meme_input = meme.map(|m| MemeInput { bytes: m.bytes, content_type: m.content_type, position: m.position, scale: m.scale });
     let render_input = SlideRenderInput {
         lines: &lines,
         sequence_number,

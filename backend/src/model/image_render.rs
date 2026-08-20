@@ -36,13 +36,25 @@ const LINE_HEIGHT_RATIO: f64 = 1.4;
 /// Het nummer wordt groter weergegeven dan de body-tekst, vaste verhouding.
 const NUMBER_FONT_SIZE_RATIO: f64 = 1.6;
 
-/// Meme-vak: breder dan de tekstkolom (spant bijna de volledige kaart), vaste
-/// maximumhoogte. Bij "na de tekst" krimpt de hoogte als er niet genoeg ruimte
-/// overblijft; bij "voor de tekst" staat dit vak vast en schuift de tekst mee.
-const MEME_LEFT_X: f64 = 80.0;
-const MEME_WIDTH_PX: f64 = 920.0;
-const MEME_MAX_HEIGHT_PX: f64 = 500.0;
+const CANVAS_WIDTH_PX: f64 = 1080.0;
+
+/// Meme-vak op schaal 1.0: breder dan de tekstkolom (spant bijna de volledige
+/// kaart), vaste basishoogte. `scale` (issue #65-vervolg) vergroot/verkleint dit
+/// vak; de breedte blijft altijd binnen MEME_MAX_WIDTH_PX zodat het nooit buiten
+/// de kaart uitsteekt, ook niet bij de grootste toegestane schaal. Bij "na de
+/// tekst" krimpt de hoogte bovendien als er niet genoeg ruimte overblijft; bij
+/// "voor de tekst" staat het vak vast en schuift de tekst mee.
+const MEME_MIN_MARGIN_PX: f64 = 40.0;
+const MEME_MAX_WIDTH_PX: f64 = CANVAS_WIDTH_PX - 2.0 * MEME_MIN_MARGIN_PX;
+const MEME_BASE_WIDTH_PX: f64 = 920.0;
+const MEME_BASE_HEIGHT_PX: f64 = 500.0;
 const MEME_GAP_PX: f64 = 40.0;
+
+/// Grenzen voor de instelbare schaalfactor - voorkomt een onleesbaar kleine of
+/// een overweldigend grote/afgesneden meme. Wordt ook gebruikt om de query-param
+/// te clampen in routes/confessions.rs.
+pub const MEME_SCALE_MIN: f64 = 0.5;
+pub const MEME_SCALE_MAX: f64 = 1.5;
 
 /// Hoeveel tekens ongeveer op één regel passen bij een gegeven lettergrootte.
 pub fn max_chars_per_line(font_size: u32) -> usize {
@@ -69,6 +81,10 @@ pub struct MemeInput<'a> {
     pub bytes: &'a [u8],
     pub content_type: &'a str,
     pub position: MemePosition,
+    /// 1.0 = standaardgrootte. Wordt al geclamped tussen MEME_SCALE_MIN/MAX vóór
+    /// dit punt (zie routes/confessions.rs), maar scaled_meme_box clampt zelf ook
+    /// nog eens de breedte - twee onafhankelijke vangnetten tegen een te grote meme.
+    pub scale: f64,
 }
 
 /// Alle waardes die voor één slide in de SVG-template ingevuld moeten worden.
@@ -105,37 +121,43 @@ struct MemeBox {
     height: f64,
 }
 
-fn compute_layout(num_lines: usize, font_size: u32, meme_position: Option<MemePosition>) -> Layout {
-    match meme_position {
+fn compute_layout(num_lines: usize, font_size: u32, meme: Option<(MemePosition, f64)>) -> Layout {
+    match meme {
         None => Layout { text_y: TEXT_START_Y, meme_box: None },
-        Some(MemePosition::Before) => layout_meme_before(),
-        Some(MemePosition::After) => layout_meme_after(num_lines, font_size),
+        Some((MemePosition::Before, scale)) => layout_meme_before(scale),
+        Some((MemePosition::After, scale)) => layout_meme_after(num_lines, font_size, scale),
     }
 }
 
+/// Meme-vak op de gegeven schaal, horizontaal gecentreerd, breedte geclamped zodat
+/// het nooit buiten de kaart uitsteekt ongeacht de schaalfactor.
+fn scaled_meme_box(y: f64, scale: f64) -> MemeBox {
+    let width = (MEME_BASE_WIDTH_PX * scale).min(MEME_MAX_WIDTH_PX);
+    let height = MEME_BASE_HEIGHT_PX * scale;
+    let x = (CANVAS_WIDTH_PX - width) / 2.0;
+    MemeBox { x, y, width, height }
+}
+
 /// Meme staat vast bovenaan de tekstzone, enkel de tekst schuift mee naar onder.
-fn layout_meme_before() -> Layout {
-    let text_y = TEXT_START_Y + MEME_MAX_HEIGHT_PX + MEME_GAP_PX;
-    Layout {
-        text_y,
-        meme_box: Some(MemeBox { x: MEME_LEFT_X, y: TEXT_START_Y, width: MEME_WIDTH_PX, height: MEME_MAX_HEIGHT_PX }),
-    }
+fn layout_meme_before(scale: f64) -> Layout {
+    let meme_box = scaled_meme_box(TEXT_START_Y, scale);
+    let text_y = TEXT_START_Y + meme_box.height + MEME_GAP_PX;
+    Layout { text_y, meme_box: Some(meme_box) }
 }
 
 /// Meme staat net onder de effectieve tekst (op basis van het echte aantal regels,
 /// niet de volledige toegestane tekstzone) - krimpt als er weinig ruimte overblijft,
 /// verdwijnt helemaal als er echt geen plaats meer is (lange tekst + meme samen).
-fn layout_meme_after(num_lines: usize, font_size: u32) -> Layout {
+fn layout_meme_after(num_lines: usize, font_size: u32, scale: f64) -> Layout {
     let line_height = font_size as f64 * LINE_HEIGHT_RATIO;
     let text_block_height = num_lines as f64 * line_height;
     let meme_y = TEXT_START_Y + text_block_height + MEME_GAP_PX;
-    let available_height = (CARD_BOTTOM_Y - meme_y).min(MEME_MAX_HEIGHT_PX);
 
-    let meme_box = if available_height > 0.0 {
-        Some(MemeBox { x: MEME_LEFT_X, y: meme_y, width: MEME_WIDTH_PX, height: available_height })
-    } else {
-        None
-    };
+    let mut meme_box = scaled_meme_box(meme_y, scale);
+    let available_height = (CARD_BOTTOM_Y - meme_y).max(0.0);
+    meme_box.height = meme_box.height.min(available_height);
+
+    let meme_box = if meme_box.height > 0.0 { Some(meme_box) } else { None };
 
     Layout { text_y: TEXT_START_Y, meme_box }
 }
@@ -143,8 +165,8 @@ fn layout_meme_after(num_lines: usize, font_size: u32) -> Layout {
 fn fill_template(template: &str, input: &SlideRenderInput) -> String {
     let lines_svg = build_tspans(input.lines);
     let number_font_size = (input.font_size as f64 * NUMBER_FONT_SIZE_RATIO).round() as u32;
-    let meme_position = input.meme.as_ref().map(|meme| meme.position);
-    let layout = compute_layout(input.lines.len(), input.font_size, meme_position);
+    let meme_placement = input.meme.as_ref().map(|meme| (meme.position, meme.scale));
+    let layout = compute_layout(input.lines.len(), input.font_size, meme_placement);
 
     let meme_element = match (&input.meme, &layout.meme_box) {
         (Some(meme), Some(meme_box)) => build_meme_element(meme, meme_box),
@@ -298,10 +320,26 @@ en meer en meer en meer bla bla bla. ".to_string();
             font_family: "Arial",
             font_size: 30,
             text_color: "#1a1a1a",
-            meme: Some(MemeInput { bytes: &one_pixel_png, content_type: "image/png", position: MemePosition::After }),
+            meme: Some(MemeInput { bytes: &one_pixel_png, content_type: "image/png", position: MemePosition::After, scale: 1.0 }),
         };
 
         let png_bytes = render_slide_to_png(&input).expect("rendering met meme zou moeten lukken");
         fs::write("test_output_with_meme.png", png_bytes).expect("wegschrijven zou moeten lukken");
+    }
+
+    #[test]
+    fn larger_scale_never_exceeds_the_max_width() {
+        let layout = layout_meme_before(MEME_SCALE_MAX);
+        let meme_box = layout.meme_box.expect("meme_box zou aanwezig moeten zijn");
+        assert!(meme_box.width <= MEME_MAX_WIDTH_PX);
+        assert!(meme_box.x >= 0.0, "moet gecentreerd blijven, niet buiten de kaart uitsteken");
+    }
+
+    #[test]
+    fn smaller_scale_shrinks_the_meme_box() {
+        let default_box = layout_meme_before(1.0).meme_box.expect("meme_box");
+        let small_box = layout_meme_before(MEME_SCALE_MIN).meme_box.expect("meme_box");
+        assert!(small_box.height < default_box.height);
+        assert!(small_box.width < default_box.width);
     }
 }
