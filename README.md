@@ -217,7 +217,7 @@ kuleuven-confessions-tool/
 │           ├── firestore.rs     # Firestore (confessions/tags/settings CRUD)
 │           ├── storage.rs       # Cloud Storage for Firebase (afbeeldingen op-/downloaden/opruimen)
 │           └── image_render.rs  # resvg: SVG-template → PNG
-└── frontend/                    # React, opgebouwd met Atomic Design (Firebase Hosting)
+└── frontend/                    # React, Atomic Design (build meegeleverd in de backend-image)
     ├── package.json
     ├── .atomic-bomb             # config voor de atomic-bomb generator
     └── src/
@@ -237,7 +237,11 @@ kuleuven-confessions-tool/
 ## Tech stack
 
 - **Backend:** Rust, axum (webserver), gecontaineriseerd, gehost op Cloud Run
-- **Frontend:** React + TypeScript (Vite), Atomic Design via `atomic-bomb`, gehost op Firebase Hosting
+- **Frontend:** React + TypeScript (Vite), Atomic Design via `atomic-bomb` — build wordt geserveerd
+  door de backend zelf (`tower-http`, statische bestanden), zelfde Cloud Run-service/origin als de
+  API. Bewuste keuze i.p.v. een aparte host (bv. Firebase Hosting): zo werkt Identity-Aware Proxy
+  (zie "Beveiliging") met één sign-in-gate voor zowel de pagina als de API-calls die de pagina doet -
+  cross-origin zou daar niet betrouwbaar mee werken.
 - **Databank:** Firestore (Firebase)
 - **Bestandsopslag:** Cloud Storage for Firebase (afbeeldingen, met automatisch opruimbeleid)
 - **Externe data:** Google Sheets API, service-account met `spreadsheets.readonly`-scope
@@ -247,7 +251,9 @@ kuleuven-confessions-tool/
 ## Beveiliging
 
 - Toegang tot de webapp via Google **Identity-Aware Proxy** — enkel toegestane Google-accounts
-  kunnen ermee inloggen, geen gedeeld wachtwoord (zie issue #31 in ISSUES.md voor de afweging)
+  kunnen ermee inloggen, geen gedeeld wachtwoord (zie issue #31 in ISSUES.md voor de afweging).
+  Werkt omdat frontend en API op hetzelfde origin draaien (zie "Tech stack"): één sign-in op de
+  pagina, de sessiecookie dekt daarna ook de `fetch()`-calls van diezelfde pagina.
 - Service-account sleutel (`.json`) **nooit** in git committen — zie `.gitignore`
 - Service-account heeft enkel leesrechten, geen schrijf/verwijderrechten op de Sheet
 - Het Sheet-ID zelf is geen geheim en mag gedeeld worden; de sleutel (`private_key`) wél altijd geheim houden
@@ -255,8 +261,12 @@ kuleuven-confessions-tool/
 
 ## Deployment
 
-- **Service:** `confessor-backend`, Cloud Run, regio `europe-west1` (zelfde regio als Firestore)
-- **Herdeployen:** `backend/deploy.sh [tag]` — bouwt de image (linux/amd64, ook vanaf Apple Silicon), pusht naar Artifact Registry, deployt naar Cloud Run
+- **Service:** `confessor-backend`, Cloud Run, regio `europe-west1` (zelfde regio als Firestore) —
+  serveert zowel de API als de gebouwde frontend (één origin, zie "Tech stack")
+- **Herdeployen:** `backend/deploy.sh [tag]` — bouwt de image (linux/amd64, ook vanaf Apple Silicon), pusht naar Artifact Registry, deployt naar Cloud Run.
+  **Nog te doen:** de Dockerfile bouwt momenteel enkel de Rust-binary; moet uitgebreid worden met
+  een `npm run build`-stap voor `frontend/` en die `dist/`-map meekopiëren, zodat de backend hem
+  effectief kan serveren.
 - **Toegang:** `--no-allow-unauthenticated` (IAM-gated) — blijft zo. Wordt **niet** naar
   `--allow-unauthenticated` gezet: toegang loopt via Identity-Aware Proxy vóór de service, met een
   lijst toegestane Google-accounts (issue #31), niet via een publiek-open API.
@@ -278,4 +288,7 @@ kuleuven-confessions-tool/
 - [ ] Afbeelding-upload naar Cloud Storage + genereer-endpoint (issues #28-29)
 - [ ] Meme/afbeelding van Drive ophalen (issue #38b)
 - [ ] Like/comment-statistieken bijwerken (issue #30)
-- [ ] Frontend (login-scherm, overzicht, detail, instellingen) — nog te starten
+- [x] Frontend-foundation: fetch-wrappers naar de backend (`api/confessions.ts`), app-shell
+- [ ] Frontend als static files serveren via `tower-http` in dezelfde Cloud Run-service (nodig vóór IAP zinvol is)
+- [ ] Identity-Aware Proxy inschakelen + toegestane Google-accounts toevoegen (issue #31, GCP Console)
+- [ ] Frontend (overzicht, detail, instellingen) — issues #33-#38

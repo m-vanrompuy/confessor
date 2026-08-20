@@ -30,6 +30,6 @@ gcloud run deploy "${SERVICE_NAME}" \
   --no-allow-unauthenticated \
   --quiet
 
-# --no-allow-unauthenticated blijft staan tot issue #31 (wachtwoord-scherm) bestaat -
-# zie README "Kostenbeheer"/"Beveiliging". Pas dan bewust omzetten naar
-# --allow-unauthenticated, niet per ongeluk.
+# --no-allow-unauthenticated blijft staan - toegang loopt via Identity-Aware Proxy
+# vóór deze service (issue #31), niet via --allow-unauthenticated. Zie README
+# "Beveiliging"/"Deployment".
