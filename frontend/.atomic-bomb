@@ -1,7 +1,7 @@
 {
   "search": "react",
-  "extension": "js",
-  "platform": "react",
+  "extension": "tsx",
+  "platform": "react-ts-vite",
   "destination": "src/components",
   "scss": true
 }
