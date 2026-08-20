@@ -88,9 +88,13 @@ pub fn render_slide_to_png(input: &SlideRenderInput) -> Result<Vec<u8>, Box<dyn 
     rasterize_svg(&filled_svg)
 }
 
+/// Het nummer staat altijd op dezelfde plek, linksboven onder het logo - een vast
+/// merk-element, geen deel van de meelopende tekst-flow. Verandert nooit mee met de
+/// meme-positie, ook al schuift de tekst zelf wel op (zie compute_layout).
+const NUMBER_Y: f64 = TEXT_START_Y + NUMBER_Y_OFFSET;
+
 struct Layout {
     text_y: f64,
-    number_y: f64,
     meme_box: Option<MemeBox>,
 }
 
@@ -103,18 +107,17 @@ struct MemeBox {
 
 fn compute_layout(num_lines: usize, font_size: u32, meme_position: Option<MemePosition>) -> Layout {
     match meme_position {
-        None => Layout { text_y: TEXT_START_Y, number_y: TEXT_START_Y + NUMBER_Y_OFFSET, meme_box: None },
+        None => Layout { text_y: TEXT_START_Y, meme_box: None },
         Some(MemePosition::Before) => layout_meme_before(),
         Some(MemePosition::After) => layout_meme_after(num_lines, font_size),
     }
 }
 
-/// Meme staat vast bovenaan de tekstzone, tekst (en nummer) schuiven mee naar onder.
+/// Meme staat vast bovenaan de tekstzone, enkel de tekst schuift mee naar onder.
 fn layout_meme_before() -> Layout {
     let text_y = TEXT_START_Y + MEME_MAX_HEIGHT_PX + MEME_GAP_PX;
     Layout {
         text_y,
-        number_y: text_y + NUMBER_Y_OFFSET,
         meme_box: Some(MemeBox { x: MEME_LEFT_X, y: TEXT_START_Y, width: MEME_WIDTH_PX, height: MEME_MAX_HEIGHT_PX }),
     }
 }
@@ -134,7 +137,7 @@ fn layout_meme_after(num_lines: usize, font_size: u32) -> Layout {
         None
     };
 
-    Layout { text_y: TEXT_START_Y, number_y: TEXT_START_Y + NUMBER_Y_OFFSET, meme_box }
+    Layout { text_y: TEXT_START_Y, meme_box }
 }
 
 fn fill_template(template: &str, input: &SlideRenderInput) -> String {
@@ -156,7 +159,7 @@ fn fill_template(template: &str, input: &SlideRenderInput) -> String {
         .replace("{{FONT_SIZE}}", &input.font_size.to_string())
         .replace("{{TEXT_COLOR}}", &escape_xml(input.text_color))
         .replace("{{TEXT_Y}}", &layout.text_y.to_string())
-        .replace("{{NUMBER_Y}}", &layout.number_y.to_string())
+        .replace("{{NUMBER_Y}}", &NUMBER_Y.to_string())
         .replace("{{MEME_ELEMENT}}", &meme_element)
 }
 
