@@ -3,12 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import Overzicht from './Overzicht'
 import { OverzichtMock } from './Overzicht.mock'
-import { listConfessions } from '../../../api/confessions'
+import { listConfessions, syncConfessions } from '../../../api/confessions'
 import { listTags } from '../../../api/tags'
 import type { Confession } from '../../../api/confessions'
 
 vi.mock('../../../api/confessions', () => ({
   listConfessions: vi.fn(),
+  syncConfessions: vi.fn(),
 }))
 vi.mock('../../../api/tags', () => ({
   listTags: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock('../../../api/tags', () => ({
 
 const mockedListConfessions = vi.mocked(listConfessions)
 const mockedListTags = vi.mocked(listTags)
+const mockedSyncConfessions = vi.mocked(syncConfessions)
 
 const sampleConfession: Confession = {
   id: '1',
@@ -39,6 +41,7 @@ const sampleConfession: Confession = {
 beforeEach(() => {
   mockedListConfessions.mockReset()
   mockedListTags.mockReset()
+  mockedSyncConfessions.mockReset()
   mockedListTags.mockResolvedValue([])
 })
 
@@ -90,5 +93,54 @@ describe('Overzicht page', () => {
     render(<Overzicht {...OverzichtMock} />)
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('kapot'))
+  })
+
+  it('toont het aantal nieuwe confessions na sync, en haalt de lijst opnieuw op', async () => {
+    mockedListConfessions.mockResolvedValue([])
+    mockedSyncConfessions.mockResolvedValue({ new_confessions_count: 3 })
+
+    render(<Overzicht {...OverzichtMock} />)
+    await waitFor(() => expect(mockedListConfessions).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByText('Sync nu'))
+
+    await waitFor(() => expect(screen.getByText('3 nieuwe confessions opgehaald.')).toBeTruthy())
+    expect(mockedListConfessions).toHaveBeenCalledTimes(2)
+  })
+
+  it('gebruikt enkelvoud voor precies 1 nieuwe confession', async () => {
+    mockedListConfessions.mockResolvedValue([])
+    mockedSyncConfessions.mockResolvedValue({ new_confessions_count: 1 })
+
+    render(<Overzicht {...OverzichtMock} />)
+    await waitFor(() => expect(mockedListConfessions).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByText('Sync nu'))
+
+    await waitFor(() => expect(screen.getByText('1 nieuwe confession opgehaald.')).toBeTruthy())
+  })
+
+  it('meldt het duidelijk als er niets nieuws was', async () => {
+    mockedListConfessions.mockResolvedValue([])
+    mockedSyncConfessions.mockResolvedValue({ new_confessions_count: 0 })
+
+    render(<Overzicht {...OverzichtMock} />)
+    await waitFor(() => expect(mockedListConfessions).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByText('Sync nu'))
+
+    await waitFor(() => expect(screen.getByText('Geen nieuwe confessions gevonden.')).toBeTruthy())
+  })
+
+  it('toont een foutmelding als sync mislukt', async () => {
+    mockedListConfessions.mockResolvedValue([])
+    mockedSyncConfessions.mockRejectedValue(new Error('sync kapot'))
+
+    render(<Overzicht {...OverzichtMock} />)
+    await waitFor(() => expect(mockedListConfessions).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByText('Sync nu'))
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('sync kapot'))
   })
 })
