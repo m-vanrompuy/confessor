@@ -1,0 +1,15 @@
+.Select {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  transition: border-color 0.2s;
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
