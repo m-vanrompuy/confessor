@@ -21,6 +21,7 @@ dependencies = [
  "serde_json",
  "tiny-skia",
  "tokio",
+ "tower-http",
  "usvg",
 ]
 

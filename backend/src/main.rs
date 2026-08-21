@@ -1,10 +1,14 @@
 use axum::Router;
+use axum::http::HeaderValue;
+use axum::http::Method;
+use axum::http::header::CONTENT_TYPE;
 use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::post;
 use axum::routing::put;
 use rustls::crypto::ring;
 use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
 
 mod business;
 mod config;
@@ -63,6 +67,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(routes::settings::get_setting).put(routes::settings::update_setting),
         );
 
+    // Enkel in debug-builds (cargo run) - een release-build (zoals de Docker-image,
+    // zie Dockerfile) bevat deze laag helemaal niet. Nodig omdat de frontend-dev-
+    // server (Vite, :5173) en de backend (:8080) lokaal andere origins zijn; in
+    // productie draaien ze same-origin (issue #74), dus daar is dit overbodig.
+    let app = if cfg!(debug_assertions) {
+        app.layer(dev_cors_layer())
+    } else {
+        app
+    };
+
     let port = config::server_port();
     let listener = TcpListener::bind(("0.0.0.0", port)).await?;
     println!("Server luistert op poort {port}");
@@ -70,4 +84,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// Specifieke origin i.p.v. een wildcard - api/confessions.ts stuurt
+/// `credentials: 'include'` mee, en credentialed requests staan geen
+/// wildcard-origin toe (browser-beperking, niet iets wat CorsLayer omzeilt).
+fn dev_cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(HeaderValue::from_static("http://localhost:5173"))
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers([CONTENT_TYPE])
+        .allow_credentials(true)
 }
