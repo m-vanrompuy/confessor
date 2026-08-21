@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import OverzichtLayout from '../../templates/OverzichtLayout'
 import { useApiRequest } from '../../../hooks'
-import { listConfessions } from '../../../api/confessions'
+import { listConfessions, syncConfessions } from '../../../api/confessions'
 import { listTags } from '../../../api/tags'
 import { toConfessionListItems, searchConfessions } from '../../../lib'
 import type { ConfessionStatus } from '../../../api/confessions'
@@ -10,11 +10,16 @@ import type { OverzichtInterface } from './Overzicht.interface'
 
 type StatusFilter = Exclude<ConfessionStatus, 'deleted'> | ''
 
+// Hoe lang de "X nieuwe confessions opgehaald"-melding blijft staan vóór ze
+// vanzelf verdwijnt.
+const SYNC_MESSAGE_DURATION_MS = 4000
+
 const Overzicht = ({ testID }: OverzichtInterface) => {
   const [searchValue, setSearchValue] = useState('')
   const [status, setStatus] = useState<StatusFilter>('')
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [showDeleted, setShowDeleted] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   const {
     data: confessions,
@@ -23,17 +28,39 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
     run: fetchConfessions,
   } = useApiRequest(listConfessions)
   const { data: tags, run: fetchTags } = useApiRequest(listTags)
+  const { loading: syncing, error: syncError, run: runSync } = useApiRequest(syncConfessions)
+
+  const currentFilterParams = useMemo(
+    () => ({ status: showDeleted ? ('deleted' as const) : status || undefined, tagIds: selectedTagIds }),
+    [status, showDeleted, selectedTagIds],
+  )
 
   useEffect(() => {
     fetchTags()
   }, [fetchTags])
 
   useEffect(() => {
-    fetchConfessions({
-      status: showDeleted ? 'deleted' : status || undefined,
-      tagIds: selectedTagIds,
-    })
-  }, [fetchConfessions, status, selectedTagIds, showDeleted])
+    fetchConfessions(currentFilterParams)
+  }, [fetchConfessions, currentFilterParams])
+
+  // De sync-melding verdwijnt vanzelf i.p.v. voor altijd te blijven staan.
+  useEffect(() => {
+    if (syncMessage === null) {
+      return
+    }
+    const timeoutId = setTimeout(() => setSyncMessage(null), SYNC_MESSAGE_DURATION_MS)
+    return () => clearTimeout(timeoutId)
+  }, [syncMessage])
+
+  const handleSync = async () => {
+    const result = await runSync()
+    if (!result) {
+      return
+    }
+
+    setSyncMessage(describeSyncResult(result.new_confessions_count))
+    fetchConfessions(currentFilterParams)
+  }
 
   const confessionListItems = useMemo(() => {
     const items = toConfessionListItems(confessions ?? [], tags ?? [])
@@ -65,6 +92,12 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
           Kon confessions niet laden: {confessionsError.message}
         </p>
       )}
+      {syncError && (
+        <p className="Overzicht__error" role="alert">
+          Sync mislukt: {syncError.message}
+        </p>
+      )}
+      {syncMessage && <p className="Overzicht__status">{syncMessage}</p>}
       {!hasLoadedConfessions && confessionsLoading && <p className="Overzicht__status">Bezig met laden...</p>}
       {hasLoadedConfessions && (
         <OverzichtLayout
@@ -80,7 +113,8 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
               showDeleted,
               onToggleShowDeleted: () => setShowDeleted((current) => !current),
             },
-            onSync: () => {},
+            onSync: handleSync,
+            syncing,
           }}
           list={{
             confessions: confessionListItems,
@@ -95,3 +129,11 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
 }
 
 export default Overzicht
+
+function describeSyncResult(newConfessionsCount: number): string {
+  if (newConfessionsCount === 0) {
+    return 'Geen nieuwe confessions gevonden.'
+  }
+  const suffix = newConfessionsCount === 1 ? '' : 's'
+  return `${newConfessionsCount} nieuwe confession${suffix} opgehaald.`
+}

@@ -111,3 +111,13 @@ export function generateConfessionImages(
 export function confessionSlideUrl(confessionId: string, slideIndex: number): string {
   return `${API_BASE_URL}/confessions/${confessionId}/slides/${slideIndex}`
 }
+
+export interface SyncResult {
+  new_confessions_count: number
+}
+
+// POST /sync - haalt nieuwe confessions op uit de Sheet (dedupe + titel-
+// generatie gebeurt backend-side).
+export function syncConfessions(): Promise<SyncResult> {
+  return apiFetch<SyncResult>('/sync', { method: 'POST' })
+}
