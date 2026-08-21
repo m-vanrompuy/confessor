@@ -23,7 +23,7 @@ Een tool om de admin van de Instagram-pagina "KU Leuven Confessions" te helpen b
 - Eén à twee gebruikers, geen complexe rolverdeling nodig
 - **Backend:** Rust (axum), als container gehost op **Cloud Run** (serverless, schaalt naar nul bij geen gebruik)
 - **Frontend:** React, opgebouwd volgens **Atomic Design** (atomen → moleculen → organismen → templates → pagina's), gescaffold met de `atomic-bomb`-tool, statisch gehost via **Firebase Hosting**
-- Eén gedeeld wachtwoord ter beveiliging (de app is publiek bereikbaar via het internet)
+- Toegang via Google Identity-Aware Proxy, enkel toegestane Google-accounts (geen gedeeld wachtwoord)
 - **Databron:** de Google Sheet gekoppeld aan het Form, gelezen via de Google Sheets API met een read-only service-account
 - **Opslag tekstdata:** Firestore (Firebase)
 - **Opslag afbeeldingen:** Cloud Storage for Firebase
@@ -53,7 +53,7 @@ Cloud Run en Cloud Storage for Firebase vereisen een betaalplan (Blaze) met een 
 5. **Confession verwijderen** — content wissen, tombstone-record behouden, verdwijnt uit de standaardlijst (zie ERD-regels)
 6. **Confession markeren als 'gebruikt'** — volgnummer toekennen
 7. **Confessie-afbeelding(en) + caption genereren** — template invullen, tekst verdelen over meerdere afbeeldingen **met behoud van de originele alinea-structuur** (een witregel in de tekst is een natuurlijk splitspunt, geen botte afkap op tekenlimiet), caption voorstellen
-8. **Instellingen/configuratie beheren** — template, tekstlimieten, opruimtermijn afbeeldingen, koppelingen, wachtwoord
+8. **Instellingen/configuratie beheren** — template, tekstlimieten, opruimtermijn afbeeldingen, koppelingen
 9. **Post-statistieken bijwerken** — like-/reactie-aantal koppelen (manueel nu, later automatisch via Meta Graph API)
 
 ---
@@ -118,7 +118,7 @@ erDiagram
 
 **Confessie-detail** — volledige tekst, apart gemarkeerd privébericht aan de admin, tags toewijzen, acties (verwijderen / markeren als gebruikt / genereren). Bij gepubliceerde confessions: extra blok met Instagram-link en statistieken. Na genereren: voorbeeld van de afbeelding(en) + voorgestelde caption, met downloadknoppen.
 
-**Instellingen** — drie tabbladen: *Tags & categorieën*, *Template* (lettertype, kleuren, tekstlimiet per afbeelding), *Algemeen* (API-koppeling, opruimtermijn afbeeldingen, wachtwoord, startnummer).
+**Instellingen** — drie tabbladen: *Tags & categorieën*, *Template* (lettertype, kleuren, tekstlimiet per afbeelding), *Algemeen* (API-koppeling, opruimtermijn afbeeldingen, startnummer). Geen wachtwoord-instelling meer — toegang loopt via Identity-Aware Proxy (zie "Beveiliging").
 
 ---
 
