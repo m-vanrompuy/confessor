@@ -1,8 +1,10 @@
 import './App.css'
+import Overzicht from './components/pages/Overzicht'
 
 // Minimale app-shell. Toegang wordt bewaakt door Identity-Aware Proxy vóór de
 // backend (zie ISSUES.md) - er is dus geen login-scherm of auth-state hier nodig.
-// De echte schermen (Overzicht/Detail/Instellingen) komen in issues #33-#38.
+// Overzicht is voorlopig het enige scherm - een router komt erbij zodra Detail/
+// Instellingen (issues #35-#38) ook bestaan.
 function App() {
   return (
     <div className="app-shell">
@@ -10,7 +12,7 @@ function App() {
         <h1>Confessor</h1>
       </header>
       <main className="app-main">
-        <p>Nog geen scherm gekoppeld.</p>
+        <Overzicht />
       </main>
     </div>
   )

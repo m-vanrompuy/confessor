@@ -1,0 +1,11 @@
+.ConfessionList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  &__empty {
+    color: var(--text);
+    text-align: center;
+    padding: 32px 0;
+  }
+}
