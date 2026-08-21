@@ -19,6 +19,17 @@ pub struct UpdateTagRequest {
     color: String,
 }
 
+/// HTTP-handler voor GET /tags.
+pub async fn list_tags() -> Result<Json<Vec<Tag>>, (StatusCode, String)> {
+    let db = firestore::make_firestore_client()
+        .await
+        .map_err(internal_error)?;
+
+    let tags = firestore::fetch_all_tags(&db).await.map_err(internal_error)?;
+
+    Ok(Json(tags))
+}
+
 /// HTTP-handler voor POST /tags.
 pub async fn create_tag(
     Json(request): Json<CreateTagRequest>,

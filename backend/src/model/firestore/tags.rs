@@ -12,6 +12,12 @@ pub struct Tag {
     pub color: String,
 }
 
+pub async fn fetch_all_tags(db: &FirestoreDb) -> Result<Vec<Tag>, Box<dyn std::error::Error>> {
+    let tags: Vec<Tag> = db.fluent().select().from(TAGS_COLLECTION).obj().query().await?;
+
+    Ok(tags)
+}
+
 pub async fn create_tag(
     db: &FirestoreDb,
     name: &str,
