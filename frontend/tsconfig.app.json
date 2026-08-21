@@ -21,5 +21,9 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // *.stories.tsx and *.mdx need @storybook/* packages that aren't installed
+  // yet (Storybook is deferred, see ISSUES.md) - excluded so tsc doesn't trip
+  // on their unresolved imports. Remove this once Storybook is set up.
+  "exclude": ["src/**/*.stories.tsx", "src/**/*.mdx"]
 }

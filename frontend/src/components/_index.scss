@@ -1,0 +1,9 @@
+// Aggregates every component bucket's styles into one entry point. Imported
+// once from main.tsx so atomic-bomb-generated component SCSS actually ends
+// up in the built CSS - the generator manages the files below this, not this
+// top-level wiring.
+@use './atoms';
+@use './molecules';
+@use './organisms';
+@use './templates';
+@use './pages';
