@@ -1,87 +1,95 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import OverzichtLayout from '../../templates/OverzichtLayout'
-import { filterConfessions } from '../../../lib'
-import type { ConfessionStatusFilter } from '../../../lib/filterConfessions/filterConfessions'
-import type { ConfessionListItem } from '../../organisms/ConfessionList/ConfessionList.interface'
-import type { FilterBarTag } from '../../molecules/FilterBar/FilterBar.interface'
+import { useApiRequest } from '../../../hooks'
+import { listConfessions } from '../../../api/confessions'
+import { listTags } from '../../../api/tags'
+import { toConfessionListItems, searchConfessions } from '../../../lib'
+import type { ConfessionStatus } from '../../../api/confessions'
 import type { OverzichtInterface } from './Overzicht.interface'
 
-// Tijdelijke mock-data - vervangen door een echte fetch via listConfessions()
-// zodra issue #34 dit scherm aan de backend koppelt.
-const MOCK_TAGS: FilterBarTag[] = [
-  { id: 'tag-1', name: 'meme', color: '#aa3bff' },
-  { id: 'tag-2', name: 'zoekertje', color: '#2f9e44' },
-]
-
-const MOCK_CONFESSIONS: ConfessionListItem[] = [
-  {
-    id: '1',
-    title: 'Op zoek naar het meisje van oudejaarsavond',
-    text: 'Ik ben op zoek naar een meisje dat ik tegen het lijf ben gelopen op de oudejaarsavond...',
-    tags: [MOCK_TAGS[1]],
-    status: 'new',
-  },
-  {
-    id: '2',
-    title: 'Confession #2',
-    text: 'Een confession die al gebruikt en gepubliceerd is.',
-    tags: [],
-    status: 'used',
-  },
-  {
-    id: '3',
-    title: 'Een grappige meme-confession',
-    text: 'Deze confession heeft een meme-tag.',
-    tags: [MOCK_TAGS[0]],
-    status: 'new',
-  },
-  {
-    id: '4',
-    title: 'Verwijderde confession',
-    text: 'Deze is verwijderd - enkel zichtbaar via Prullenmand.',
-    tags: [],
-    status: 'deleted',
-  },
-]
+type StatusFilter = Exclude<ConfessionStatus, 'deleted'> | ''
 
 const Overzicht = ({ testID }: OverzichtInterface) => {
   const [searchValue, setSearchValue] = useState('')
-  const [status, setStatus] = useState<ConfessionStatusFilter>('')
+  const [status, setStatus] = useState<StatusFilter>('')
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [showDeleted, setShowDeleted] = useState(false)
 
-  const confessions = useMemo(
-    () => filterConfessions(MOCK_CONFESSIONS, { searchValue, status, selectedTagIds, showDeleted }),
-    [searchValue, status, selectedTagIds, showDeleted],
+  const {
+    data: confessions,
+    loading: confessionsLoading,
+    error: confessionsError,
+    run: fetchConfessions,
+  } = useApiRequest(listConfessions)
+  const { data: tags, run: fetchTags } = useApiRequest(listTags)
+
+  useEffect(() => {
+    fetchTags()
+  }, [fetchTags])
+
+  useEffect(() => {
+    fetchConfessions({
+      status: showDeleted ? 'deleted' : status || undefined,
+      tagIds: selectedTagIds,
+    })
+  }, [fetchConfessions, status, selectedTagIds, showDeleted])
+
+  const confessionListItems = useMemo(() => {
+    const items = toConfessionListItems(confessions ?? [], tags ?? [])
+    // De backend kent geen "niet verwijderd"-filter (enkel een exacte status
+    // of geen filter) - zonder gekozen status krijgen we dus ook verwijderde
+    // confessions terug. Die moeten hier hoe dan ook weg, tenzij Prullenmand
+    // net aanstaat (dan bestaat de lijst sowieso enkel uit verwijderde).
+    const visible = showDeleted ? items : items.filter((item) => item.status !== 'deleted')
+    return searchConfessions(visible, searchValue)
+  }, [confessions, tags, searchValue, showDeleted])
+
+  const availableTags = useMemo(
+    () => (tags ?? []).map((tag) => ({ id: tag.id ?? tag.name, name: tag.name, color: tag.color })),
+    [tags],
   )
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((current) => (current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]))
   }
 
+  // Pas de "geen confessions gevonden"-leegtestaat tonen ná de eerste
+  // succesvolle fetch - anders knippert die eventjes vóór de echte data er is.
+  const hasLoadedConfessions = confessions !== null
+
   return (
     <div className="Overzicht" data-testid={testID}>
-      <OverzichtLayout
-        toolbar={{
-          searchValue,
-          onSearchChange: (event: ChangeEvent<HTMLInputElement>) => setSearchValue(event.target.value),
-          filter: {
-            status,
-            onStatusChange: (event) => setStatus(event.target.value as ConfessionStatusFilter),
-            availableTags: MOCK_TAGS,
-            selectedTagIds,
-            onToggleTag: toggleTag,
-            showDeleted,
-            onToggleShowDeleted: () => setShowDeleted((current) => !current),
-          },
-          onSync: () => {},
-        }}
-        list={{
-          confessions,
-          onSelectConfession: () => {},
-        }}
-      />
+      {confessionsError && (
+        <p className="Overzicht__error" role="alert">
+          Kon confessions niet laden: {confessionsError.message}
+        </p>
+      )}
+      {!hasLoadedConfessions && confessionsLoading && <p className="Overzicht__status">Bezig met laden...</p>}
+      {hasLoadedConfessions && (
+        <OverzichtLayout
+          toolbar={{
+            searchValue,
+            onSearchChange: (event: ChangeEvent<HTMLInputElement>) => setSearchValue(event.target.value),
+            filter: {
+              status,
+              onStatusChange: (event) => setStatus(event.target.value as StatusFilter),
+              availableTags,
+              selectedTagIds,
+              onToggleTag: toggleTag,
+              showDeleted,
+              onToggleShowDeleted: () => setShowDeleted((current) => !current),
+            },
+            onSync: () => {},
+          }}
+          list={{
+            confessions: confessionListItems,
+            // Navigatie naar /confessions/:id volgt zodra de Detail-pagina
+            // bestaat (issue #35/#36) - zie ook issue #82.
+            onSelectConfession: () => {},
+          }}
+        />
+      )}
     </div>
   )
 }
