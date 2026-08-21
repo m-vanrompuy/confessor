@@ -38,9 +38,13 @@ export interface ConfessionFilters {
 
 // GET /confessions?status=...&tags=...
 export function listConfessions(filters: ConfessionFilters = {}): Promise<Confession[]> {
+  // Een lege array mag geen `tags=` (lege string) op de URL zetten: de backend
+  // splitst dat naar [""] i.p.v. een lege lijst, en filtert dan alles weg (geen
+  // enkele confession heeft een tag-ID van "") - bug gevonden tijdens #34.
+  const tagIds = filters.tagIds ?? []
   const query = buildQueryString({
     status: filters.status,
-    tags: filters.tagIds?.join(','),
+    tags: tagIds.length > 0 ? tagIds.join(',') : undefined,
   })
   return apiFetch<Confession[]>(`/confessions${query}`)
 }

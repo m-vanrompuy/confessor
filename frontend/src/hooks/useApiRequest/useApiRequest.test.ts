@@ -43,6 +43,40 @@ describe('useApiRequest', () => {
     expect(result.current.loading).toBe(false)
   })
 
+  it('negeert een verouderd antwoord dat later binnenkomt dan een nieuwere run', async () => {
+    let resolveFirst: (value: string) => void = () => {}
+    let resolveSecond: (value: string) => void = () => {}
+
+    const request = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<string>((resolve) => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => new Promise<string>((resolve) => { resolveSecond = resolve }))
+
+    const { result } = renderHook(() => useApiRequest(request))
+
+    act(() => {
+      void result.current.run('eerste')
+    })
+    act(() => {
+      void result.current.run('tweede')
+    })
+
+    // De tweede (nieuwste) run lost eerst op...
+    await act(async () => {
+      resolveSecond('resultaat-tweede')
+      await Promise.resolve()
+    })
+    expect(result.current.data).toBe('resultaat-tweede')
+
+    // ...en de eerste (verouderde) run lost daarna alsnog op - mag het
+    // nieuwere resultaat niet overschrijven.
+    await act(async () => {
+      resolveFirst('resultaat-eerste')
+      await Promise.resolve()
+    })
+    expect(result.current.data).toBe('resultaat-tweede')
+  })
+
   it('reset de vorige fout bij een nieuwe, succesvolle run', async () => {
     const request = vi
       .fn()

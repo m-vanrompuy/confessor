@@ -1,2 +1,11 @@
 .Overzicht {
+  &__error {
+    color: var(--danger);
+    margin: 0 0 16px;
+  }
+
+  &__status {
+    color: var(--text);
+    margin: 0 0 16px;
+  }
 }

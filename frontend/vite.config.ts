@@ -7,4 +7,7 @@ export default defineConfig({
   plugins: [react()],
   // atomic-bomb's generated tests render with react-dom/server (no DOM
   // needed), so the default 'node' test environment is enough - no jsdom.
+  test: {
+    setupFiles: ['./src/test-setup.ts'],
+  },
 })

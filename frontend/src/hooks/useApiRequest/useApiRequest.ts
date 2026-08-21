@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 export interface UseApiRequestResult<TArgs extends unknown[], TResult> {
   data: TResult | null
@@ -22,21 +22,35 @@ export function useApiRequest<TArgs extends unknown[], TResult>(
   const [data, setData] = useState<TResult | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(false)
+  // Bewaakt tegen een out-of-order antwoord: als `run` twee keer snel na
+  // elkaar aangeroepen wordt (bv. een filter dat meteen weer verandert) is er
+  // geen garantie dat de EERSTE call ook het EERST antwoordt - een trage,
+  // verouderde call mag een nieuwer resultaat nooit overschrijven. Gevonden
+  // tijdens #34: een grote ongefilterde fetch overschreef een kleinere, later
+  // gestarte gefilterde fetch omdat die trager binnenkwam.
+  const latestRequestId = useRef(0)
 
   const run = useCallback(
     async (...args: TArgs) => {
+      const requestId = ++latestRequestId.current
       setLoading(true)
       setError(null)
 
       try {
         const result = await request(...args)
-        setData(result)
+        if (requestId === latestRequestId.current) {
+          setData(result)
+        }
         return result
       } catch (caughtError) {
-        setError(toError(caughtError))
+        if (requestId === latestRequestId.current) {
+          setError(toError(caughtError))
+        }
         return undefined
       } finally {
-        setLoading(false)
+        if (requestId === latestRequestId.current) {
+          setLoading(false)
+        }
       }
     },
     [request],
