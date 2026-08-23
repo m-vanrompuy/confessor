@@ -16,4 +16,16 @@ describe('Button', () => {
     const rendered = renderToStaticMarkup(<Button testID={testID} {...ButtonMock} disabled />)
     expect(rendered).toContain('disabled=""')
   })
+
+  it('renders as a real <a> when href is given', () => {
+    const rendered = renderToStaticMarkup(<Button testID={testID} {...ButtonMock} href="/confessions/1/slides/1" download />)
+    expect(rendered).toContain('<a')
+    expect(rendered).toContain('href="/confessions/1/slides/1"')
+  })
+
+  it('valt terug op <button> wanneer href én disabled samen gezet zijn', () => {
+    const rendered = renderToStaticMarkup(<Button testID={testID} {...ButtonMock} href="/x" disabled />)
+    expect(rendered).toContain('<button')
+    expect(rendered).not.toContain('<a')
+  })
 })

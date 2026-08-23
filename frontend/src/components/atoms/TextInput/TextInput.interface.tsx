@@ -4,7 +4,9 @@ export interface TextInputInterface {
   value: string
   onChange: ChangeEventHandler<HTMLInputElement>
   placeholder?: string
-  type?: 'text' | 'search'
+  type?: 'text' | 'search' | 'number'
+  /** Enkel zinvol samen met type="number". */
+  min?: number
   size?: 's' | 'm' | 'l'
   disabled?: boolean
   style?: CSSProperties

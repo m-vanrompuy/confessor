@@ -1,0 +1,20 @@
+import { describe, it, expect } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import PrivateMessageBlock from './PrivateMessageBlock'
+import { PrivateMessageBlockMock } from './PrivateMessageBlock.mock'
+
+const testID = 'PrivateMessageBlock-' + Math.floor(Math.random() * 90000 + 10000)
+
+describe('PrivateMessageBlock', () => {
+  it('toont het bericht met een duidelijk "niet openbaar"-label', () => {
+    const rendered = renderToStaticMarkup(<PrivateMessageBlock testID={testID} {...PrivateMessageBlockMock} />)
+    expect(rendered).toContain(`data-testid="${testID}"`)
+    expect(rendered).toContain('niet openbaar')
+    expect(rendered).toContain('Dit bericht is enkel voor de admin bedoeld.')
+  })
+
+  it('rendert niets wanneer er geen privébericht is', () => {
+    const rendered = renderToStaticMarkup(<PrivateMessageBlock testID={testID} message={null} />)
+    expect(rendered).toBe('')
+  })
+})

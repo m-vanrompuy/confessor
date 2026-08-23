@@ -5,6 +5,7 @@ const TextInput = ({
   onChange,
   placeholder,
   type = 'text',
+  min,
   size = 'm',
   disabled = false,
   style,
@@ -16,6 +17,7 @@ const TextInput = ({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
+      min={min}
       disabled={disabled}
       style={style}
       data-testid={testID}

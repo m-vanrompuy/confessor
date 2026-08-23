@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router'
 import Overzicht from './Overzicht'
 import { OverzichtMock } from './Overzicht.mock'
 import { listConfessions, syncConfessions } from '../../../api/confessions'
@@ -38,6 +39,19 @@ const sampleConfession: Confession = {
   meme_attachments: [],
 }
 
+// Overzicht navigeert nu (useNavigate), dus heeft een Router-context nodig -
+// ook een tweede route om te controleren dat de navigatie effectief aankomt.
+function renderOverzicht() {
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<Overzicht {...OverzichtMock} />} />
+        <Route path="/confessions/:id" element={<p>Detail-pagina</p>} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
 beforeEach(() => {
   mockedListConfessions.mockReset()
   mockedListTags.mockReset()
@@ -49,17 +63,28 @@ describe('Overzicht page', () => {
   it('toont een laadstatus, dan de confessions van de backend', async () => {
     mockedListConfessions.mockResolvedValue([sampleConfession])
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
 
     expect(screen.getByText('Bezig met laden...')).toBeTruthy()
 
     await waitFor(() => expect(screen.getByText('Een titel')).toBeTruthy())
   })
 
+  it('navigeert naar /confessions/:id bij het klikken op een confession', async () => {
+    mockedListConfessions.mockResolvedValue([sampleConfession])
+
+    renderOverzicht()
+    await waitFor(() => expect(screen.getByText('Een titel')).toBeTruthy())
+
+    fireEvent.click(screen.getByText('Een titel'))
+
+    await waitFor(() => expect(screen.getByText('Detail-pagina')).toBeTruthy())
+  })
+
   it('vraagt standaard geen verwijderde confessions op', async () => {
     mockedListConfessions.mockResolvedValue([])
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
 
     await waitFor(() => expect(mockedListConfessions).toHaveBeenCalledWith({ status: undefined, tagIds: [] }))
   })
@@ -70,7 +95,7 @@ describe('Overzicht page', () => {
       { ...sampleConfession, id: '2', title: 'Verwijderde confession', status: 'deleted' },
     ])
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
 
     await waitFor(() => expect(screen.getByText('Een titel')).toBeTruthy())
     expect(screen.queryByText('Verwijderde confession')).toBeNull()
@@ -79,7 +104,7 @@ describe('Overzicht page', () => {
   it('vraagt status=deleted op wanneer Prullenmand aanstaat', async () => {
     mockedListConfessions.mockResolvedValue([])
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
     await waitFor(() => expect(mockedListConfessions).toHaveBeenCalled())
 
     fireEvent.click(screen.getByText('Prullenmand'))
@@ -90,7 +115,7 @@ describe('Overzicht page', () => {
   it('toont een foutmelding als het ophalen mislukt', async () => {
     mockedListConfessions.mockRejectedValue(new Error('kapot'))
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('kapot'))
   })
@@ -99,7 +124,7 @@ describe('Overzicht page', () => {
     mockedListConfessions.mockResolvedValue([])
     mockedSyncConfessions.mockResolvedValue({ new_confessions_count: 3 })
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
     await waitFor(() => expect(mockedListConfessions).toHaveBeenCalledTimes(1))
 
     fireEvent.click(screen.getByText('Sync nu'))
@@ -112,7 +137,7 @@ describe('Overzicht page', () => {
     mockedListConfessions.mockResolvedValue([])
     mockedSyncConfessions.mockResolvedValue({ new_confessions_count: 1 })
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
     await waitFor(() => expect(mockedListConfessions).toHaveBeenCalled())
 
     fireEvent.click(screen.getByText('Sync nu'))
@@ -124,7 +149,7 @@ describe('Overzicht page', () => {
     mockedListConfessions.mockResolvedValue([])
     mockedSyncConfessions.mockResolvedValue({ new_confessions_count: 0 })
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
     await waitFor(() => expect(mockedListConfessions).toHaveBeenCalled())
 
     fireEvent.click(screen.getByText('Sync nu'))
@@ -136,7 +161,7 @@ describe('Overzicht page', () => {
     mockedListConfessions.mockResolvedValue([])
     mockedSyncConfessions.mockRejectedValue(new Error('sync kapot'))
 
-    render(<Overzicht {...OverzichtMock} />)
+    renderOverzicht()
     await waitFor(() => expect(mockedListConfessions).toHaveBeenCalled())
 
     fireEvent.click(screen.getByText('Sync nu'))
