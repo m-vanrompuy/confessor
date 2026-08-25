@@ -9,6 +9,23 @@
   border-bottom: 1px solid var(--border);
 }
 
+.app-nav {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 12px;
+
+  a {
+    color: var(--text);
+    font-size: 14px;
+    text-decoration: none;
+
+    &:hover {
+      color: var(--text-h);
+    }
+  }
+}
+
 .app-main {
   flex: 1;
   padding: 32px;

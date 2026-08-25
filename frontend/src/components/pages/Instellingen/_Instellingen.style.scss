@@ -1,0 +1,12 @@
+.Instellingen {
+  &__title {
+    margin: 0 0 16px;
+    font-size: 22px;
+    color: var(--text-h);
+  }
+
+  &__error {
+    color: var(--danger);
+    margin: 0 0 16px;
+  }
+}
