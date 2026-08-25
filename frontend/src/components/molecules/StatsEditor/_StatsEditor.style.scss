@@ -1,0 +1,18 @@
+.StatsEditor {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text);
+
+    .TextInput {
+      width: 90px;
+    }
+  }
+}

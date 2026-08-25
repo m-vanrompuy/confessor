@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
+import { useNavigate } from 'react-router'
 import OverzichtLayout from '../../templates/OverzichtLayout'
 import { useApiRequest } from '../../../hooks'
 import { listConfessions, syncConfessions } from '../../../api/confessions'
@@ -15,6 +16,7 @@ type StatusFilter = Exclude<ConfessionStatus, 'deleted'> | ''
 const SYNC_MESSAGE_DURATION_MS = 4000
 
 const Overzicht = ({ testID }: OverzichtInterface) => {
+  const navigate = useNavigate()
   const [searchValue, setSearchValue] = useState('')
   const [status, setStatus] = useState<StatusFilter>('')
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
@@ -118,9 +120,7 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
           }}
           list={{
             confessions: confessionListItems,
-            // Navigatie naar /confessions/:id volgt zodra de Detail-pagina
-            // bestaat (issue #35/#36) - zie ook issue #82.
-            onSelectConfession: () => {},
+            onSelectConfession: (id: string) => navigate(`/confessions/${id}`),
           }}
         />
       )}

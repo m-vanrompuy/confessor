@@ -8,6 +8,7 @@
   font-family: inherit;
   font-weight: 500;
   cursor: pointer;
+  text-decoration: none; // enkel relevant wanneer dit een <a> is (href gezet)
   transition: border-color 0.2s, opacity 0.2s;
 
   &:disabled {
