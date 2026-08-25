@@ -9,6 +9,8 @@ export interface ButtonInterface {
   href?: string
   /** Enkel zinvol samen met `href` - zet het native download-attribuut. */
   download?: string | boolean
+  /** Enkel zinvol samen met `href`, bv. "_blank" om in een nieuwe tab te openen. */
+  target?: string
   variant?: 'primary' | 'secondary' | 'danger'
   size?: 's' | 'm' | 'l'
   disabled?: boolean
