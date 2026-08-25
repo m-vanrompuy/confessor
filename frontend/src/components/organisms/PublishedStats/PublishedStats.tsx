@@ -1,12 +1,12 @@
+import { TextInput } from '../../atoms'
 import { StatsEditor } from '../../molecules'
 import type { PublishedStatsInterface } from './PublishedStats.interface'
 
-// De backend heeft momenteel geen `instagram_post_url`-veld op Confession
-// (enkel like_count/comment_count bestaan echt) - dit rendert al wel de
-// volledige README-schermschets, maar `instagramPostUrl` zal nog `null`
-// blijven tot dat veld er is (nodig vóór issue #36 dit echt kan koppelen).
+// Nu echt bewerkbaar (issue #36) - de admin plakt de link handmatig in nadat
+// de confession op Instagram gepost is, geen automatische koppeling.
 const PublishedStats = ({
   instagramPostUrl,
+  onInstagramPostUrlChange,
   likeCount,
   commentCount,
   onLikeCountChange,
@@ -18,13 +18,24 @@ const PublishedStats = ({
   return (
     <div className="PublishedStats" data-testid={testID}>
       <h3 className="PublishedStats__heading">Statistieken</h3>
-      {instagramPostUrl ? (
+
+      {instagramPostUrl && (
         <a href={instagramPostUrl} target="_blank" rel="noreferrer" className="PublishedStats__link">
           Bekijk op Instagram ↗
         </a>
-      ) : (
-        <p className="PublishedStats__noLink">Nog geen Instagram-link ingesteld.</p>
       )}
+
+      <label className="PublishedStats__field">
+        Instagram-link
+        <TextInput
+          type="text"
+          value={instagramPostUrl}
+          onChange={onInstagramPostUrlChange}
+          placeholder="https://instagram.com/p/..."
+          size="s"
+        />
+      </label>
+
       <StatsEditor
         likeCount={likeCount}
         commentCount={commentCount}

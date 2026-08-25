@@ -15,9 +15,16 @@
     font-size: 14px;
   }
 
-  &__noLink {
-    margin: 0;
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
     color: var(--text);
-    font-size: 14px;
+
+    .TextInput {
+      width: 100%;
+      max-width: 320px;
+    }
   }
 }
