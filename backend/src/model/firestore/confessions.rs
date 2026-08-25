@@ -40,6 +40,11 @@ pub struct Confession {
     /// bewaartermijn-instelling wanneer de afbeeldingen opgeruimd worden (issue #61).
     #[serde(default)]
     pub used_at: Option<DateTime<Utc>>,
+    /// Manueel ingevuld door de admin nadat de confession op Instagram gepost is
+    /// (issue #90) - geen automatische koppeling, dat staat gepland via de Meta
+    /// Graph API (zie README).
+    #[serde(default)]
+    pub instagram_post_url: Option<String>,
     #[serde(default)]
     pub like_count: Option<u32>,
     #[serde(default)]
@@ -356,24 +361,29 @@ pub async fn clear_slide_paths(
     Ok(())
 }
 
-/// Werkt like/comment-aantallen manueel bij (issue #30). stats_last_updated_at wordt
-/// automatisch gezet - niet iets wat de admin zelf invult.
+/// Werkt like/comment-aantallen en de Instagram-link manueel bij (issues #30/#90).
+/// stats_last_updated_at wordt automatisch gezet - niet iets wat de admin zelf invult.
+/// instagram_post_url wordt telkens volledig overschreven (net als like/comment_count) -
+/// de frontend stuurt steeds de huidige stand van alle drie samen mee, geen gedeeltelijke
+/// merge nodig.
 pub async fn update_confession_stats(
     db: &FirestoreDb,
     confession_id: &str,
     like_count: u32,
     comment_count: u32,
+    instagram_post_url: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
         like_count: Some(like_count),
         comment_count: Some(comment_count),
         stats_last_updated_at: Some(Utc::now()),
+        instagram_post_url,
         ..Default::default()
     };
 
     db.fluent()
         .update()
-        .fields(paths!(Confession::{like_count, comment_count, stats_last_updated_at}))
+        .fields(paths!(Confession::{like_count, comment_count, stats_last_updated_at, instagram_post_url}))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)

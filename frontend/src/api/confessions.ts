@@ -24,6 +24,8 @@ export interface Confession {
   suggested_caption: string | null
   slide_paths: string[]
   used_at: string | null
+  /** Manueel ingevuld door de admin - geen automatische koppeling (issue #90). */
+  instagram_post_url: string | null
   like_count: number | null
   comment_count: number | null
   stats_last_updated_at: string | null
@@ -70,6 +72,7 @@ export function markConfessionAsUsed(confessionId: string): Promise<void> {
 export interface ConfessionStats {
   like_count: number
   comment_count: number
+  instagram_post_url?: string | null
 }
 
 // PUT /confessions/{id}/stats
