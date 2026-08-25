@@ -9,6 +9,7 @@ const Button = ({
   type = 'button',
   href,
   download,
+  target,
   variant = 'primary',
   size = 'm',
   disabled = false,
@@ -20,7 +21,18 @@ const Button = ({
 
   if (href && !disabled) {
     return (
-      <a href={href} download={download} title={title} style={style} data-testid={testID} className={className}>
+      <a
+        href={href}
+        download={download}
+        target={target}
+        // "_blank" zonder dit laat de geopende pagina toegang houden tot
+        // window.opener - reverse-tabnabbing-risico, standaard dichtgezet.
+        rel={target ? 'noopener noreferrer' : undefined}
+        title={title}
+        style={style}
+        data-testid={testID}
+        className={className}
+      >
         {children}
       </a>
     )

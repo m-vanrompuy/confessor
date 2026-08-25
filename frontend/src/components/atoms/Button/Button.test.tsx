@@ -28,4 +28,15 @@ describe('Button', () => {
     expect(rendered).toContain('<button')
     expect(rendered).not.toContain('<a')
   })
+
+  it('zet target + een dichtgetimmerde rel wanneer target gegeven is', () => {
+    const rendered = renderToStaticMarkup(<Button testID={testID} {...ButtonMock} href="/x" target="_blank" />)
+    expect(rendered).toContain('target="_blank"')
+    expect(rendered).toContain('rel="noopener noreferrer"')
+  })
+
+  it('zet geen rel wanneer er geen target is', () => {
+    const rendered = renderToStaticMarkup(<Button testID={testID} {...ButtonMock} href="/x" />)
+    expect(rendered).not.toContain('rel=')
+  })
 })
