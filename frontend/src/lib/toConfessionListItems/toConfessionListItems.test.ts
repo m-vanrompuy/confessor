@@ -22,6 +22,7 @@ function makeConfession(overrides: Partial<Confession> = {}): Confession {
     suggested_caption: null,
     slide_paths: [],
     used_at: null,
+    instagram_post_url: null,
     like_count: null,
     comment_count: null,
     stats_last_updated_at: null,

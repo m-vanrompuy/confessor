@@ -118,6 +118,9 @@ pub async fn mark_confession_as_used(
 pub struct UpdateStatsRequest {
     like_count: u32,
     comment_count: u32,
+    /// Optioneel - de admin plakt deze manueel in nadat de confession op Instagram
+    /// gepost is (issue #90).
+    instagram_post_url: Option<String>,
 }
 
 /// HTTP-handler voor PUT /confessions/{id}/stats. Manuele update, later te vervangen
@@ -130,9 +133,15 @@ pub async fn update_confession_stats(
         .await
         .map_err(internal_error)?;
 
-    firestore::update_confession_stats(&db, &confession_id, request.like_count, request.comment_count)
-        .await
-        .map_err(internal_error)?;
+    firestore::update_confession_stats(
+        &db,
+        &confession_id,
+        request.like_count,
+        request.comment_count,
+        request.instagram_post_url,
+    )
+    .await
+    .map_err(internal_error)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
