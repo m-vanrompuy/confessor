@@ -71,6 +71,20 @@ describe('Overzicht page', () => {
     await waitFor(() => expect(screen.getByText('Een titel')).toBeTruthy())
   })
 
+  it('toont de confessions met de meest recente eerst', async () => {
+    mockedListConfessions.mockResolvedValue([
+      { ...sampleConfession, id: '1', title: 'Oktober 2025', timestamp: '1-10-2025 14:36:58' },
+      { ...sampleConfession, id: '2', title: 'Januari 2026', timestamp: '1-1-2026 10:19:28' },
+      { ...sampleConfession, id: '3', title: 'November 2025', timestamp: '15-11-2025 09:00:00' },
+    ])
+
+    renderOverzicht()
+
+    await waitFor(() => expect(screen.getByText('Oktober 2025')).toBeTruthy())
+    const titles = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
+    expect(titles).toEqual(['Januari 2026', 'November 2025', 'Oktober 2025'])
+  })
+
   it('navigeert naar /confessions/:id bij het klikken op een confession', async () => {
     mockedListConfessions.mockResolvedValue([sampleConfession])
 

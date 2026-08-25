@@ -5,7 +5,7 @@ import OverzichtLayout from '../../templates/OverzichtLayout'
 import { useApiRequest } from '../../../hooks'
 import { listConfessions, syncConfessions } from '../../../api/confessions'
 import { listTags } from '../../../api/tags'
-import { toConfessionListItems, searchConfessions } from '../../../lib'
+import { toConfessionListItems, searchConfessions, sortConfessionsByRecency } from '../../../lib'
 import type { ConfessionStatus } from '../../../api/confessions'
 import type { OverzichtInterface } from './Overzicht.interface'
 
@@ -71,7 +71,8 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
   }
 
   const confessionListItems = useMemo(() => {
-    const items = toConfessionListItems(confessions ?? [], tags ?? [])
+    const sorted = sortConfessionsByRecency(confessions ?? [])
+    const items = toConfessionListItems(sorted, tags ?? [])
     // De backend kent geen "niet verwijderd"-filter (enkel een exacte status
     // of geen filter) - zonder gekozen status krijgen we dus ook verwijderde
     // confessions terug. Die moeten hier hoe dan ook weg, tenzij Prullenmand
