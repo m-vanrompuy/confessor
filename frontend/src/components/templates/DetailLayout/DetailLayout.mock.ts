@@ -6,6 +6,8 @@ import type { DetailLayoutInterface } from './DetailLayout.interface'
 
 export const DetailLayoutMock: DetailLayoutInterface = {
   title: 'Confession #2',
+  submittedAt: '1-1-2026 13:37:04',
+  confessionId: '1-1-2026 13:37:04-2820642060758411911',
   onBack: () => {},
   details: ConfessionDetailsMock,
   actions: ConfessionActionsMock,

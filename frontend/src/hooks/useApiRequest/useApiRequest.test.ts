@@ -30,12 +30,12 @@ describe('useApiRequest', () => {
     expect(request).toHaveBeenCalledWith('arg')
   })
 
-  it('zet error i.p.v. data als de call mislukt', async () => {
+  it('zet error i.p.v. data als de call mislukt, en gooit de fout ook opnieuw op', async () => {
     const request = vi.fn().mockRejectedValue(new Error('kapot'))
     const { result } = renderHook(() => useApiRequest(request))
 
     await act(async () => {
-      await result.current.run()
+      await expect(result.current.run()).rejects.toThrow('kapot')
     })
 
     expect(result.current.data).toBeNull()
@@ -85,7 +85,7 @@ describe('useApiRequest', () => {
     const { result } = renderHook(() => useApiRequest(request))
 
     await act(async () => {
-      await result.current.run()
+      await expect(result.current.run()).rejects.toThrow('eerste fout')
     })
     expect(result.current.error?.message).toBe('eerste fout')
 

@@ -11,6 +11,8 @@ describe('DetailLayout', () => {
     expect(rendered).toContain(`data-testid="${testID}"`)
     expect(rendered).toContain(DetailLayoutMock.title)
     expect(rendered).toContain('Terug naar overzicht')
+    expect(rendered).toContain(DetailLayoutMock.submittedAt)
+    expect(rendered).toContain(DetailLayoutMock.confessionId)
   })
 
   it('toont geen statistieken-blok wanneer publishedStats null is', () => {

@@ -51,6 +51,11 @@ export function listConfessions(filters: ConfessionFilters = {}): Promise<Confes
   return apiFetch<Confession[]>(`/confessions${query}`)
 }
 
+// GET /confessions/{id} - voor de Detail-pagina (issue #36/#92).
+export function getConfession(confessionId: string): Promise<Confession> {
+  return apiFetch<Confession>(`/confessions/${confessionId}`)
+}
+
 // PUT /confessions/{id}/tags - overschrijft de volledige tag-lijst.
 export function updateConfessionTags(confessionId: string, tagIds: string[]): Promise<void> {
   return apiFetch<void>(`/confessions/${confessionId}/tags`, {
