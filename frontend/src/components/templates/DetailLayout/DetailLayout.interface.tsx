@@ -5,6 +5,9 @@ import type { PublishedStatsInterface } from '../../organisms/PublishedStats/Pub
 
 export interface DetailLayoutInterface {
   title: string
+  /** Zoals ingevuld in het Google Form - al een leesbare string, geen ISO-datum om te herformatteren. */
+  submittedAt: string
+  confessionId: string
   onBack: () => void
   details: ConfessionDetailsInterface
   actions: ConfessionActionsInterface

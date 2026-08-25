@@ -4,8 +4,17 @@ export interface UseApiRequestResult<TArgs extends unknown[], TResult> {
   data: TResult | null
   error: Error | null
   loading: boolean
-  /** Roept de gegeven functie aan en beheert loading/error/data eromheen. */
-  run: (...args: TArgs) => Promise<TResult | undefined>
+  /**
+   * Roept de gegeven functie aan en beheert loading/error/data eromheen.
+   * Gooit de fout opnieuw op (na 'm ook in `error` gezet te hebben) - nodig
+   * omdat een void-wrapper (bv. markConfessionAsUsed) bij succes ook
+   * `undefined` teruggeeft, dus succes en falen zijn anders niet te
+   * onderscheiden aan de return-waarde alleen (gevonden tijdens #36). Wie
+   * enkel de automatische error-weergave wil, hoeft de fout niet zelf op te
+   * vangen; wie na succes iets moet doen (bv. herladen of navigeren), vangt
+   * 'm met try/catch.
+   */
+  run: (...args: TArgs) => Promise<TResult>
 }
 
 // Standaardiseert loading/error/data-state rond één van de api/confessions.ts-
@@ -43,10 +52,11 @@ export function useApiRequest<TArgs extends unknown[], TResult>(
         }
         return result
       } catch (caughtError) {
+        const error = toError(caughtError)
         if (requestId === latestRequestId.current) {
-          setError(toError(caughtError))
+          setError(error)
         }
-        return undefined
+        throw error
       } finally {
         if (requestId === latestRequestId.current) {
           setLoading(false)

@@ -37,12 +37,17 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
     [status, showDeleted, selectedTagIds],
   )
 
+  // fetchTags/fetchConfessions runnen hier "fire and forget" - de rethrow van
+  // useApiRequest hier enkel opvangen zodat er geen unhandled-rejection
+  // ontstaat (confessionsError wordt hieronder al getoond; een mislukte
+  // tags-fetch toont vandaag nog niets aan de gebruiker - kleine, aparte
+  // polish-kans, niet iets voor deze issue).
   useEffect(() => {
-    fetchTags()
+    fetchTags().catch(() => {})
   }, [fetchTags])
 
   useEffect(() => {
-    fetchConfessions(currentFilterParams)
+    fetchConfessions(currentFilterParams).catch(() => {})
   }, [fetchConfessions, currentFilterParams])
 
   // De sync-melding verdwijnt vanzelf i.p.v. voor altijd te blijven staan.
@@ -55,13 +60,14 @@ const Overzicht = ({ testID }: OverzichtInterface) => {
   }, [syncMessage])
 
   const handleSync = async () => {
-    const result = await runSync()
-    if (!result) {
-      return
+    try {
+      const result = await runSync()
+      setSyncMessage(describeSyncResult(result.new_confessions_count))
+      fetchConfessions(currentFilterParams)
+    } catch {
+      // syncError is al gezet door useApiRequest en wordt hierboven getoond -
+      // hier niets meer te doen.
     }
-
-    setSyncMessage(describeSyncResult(result.new_confessions_count))
-    fetchConfessions(currentFilterParams)
   }
 
   const confessionListItems = useMemo(() => {

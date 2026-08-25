@@ -8,14 +8,29 @@ import type { DetailLayoutInterface } from './DetailLayout.interface'
 // Layout only - geen router-kennis hier (vandaar onBack als callback i.p.v.
 // een <Link>), zelfde patroon als ConfessionList's onSelectConfession. De
 // pagina (Detail) beslist wat "terug" betekent.
-const DetailLayout = ({ title, onBack, details, actions, slides, publishedStats, testID }: DetailLayoutInterface) => {
+const DetailLayout = ({
+  title,
+  submittedAt,
+  confessionId,
+  onBack,
+  details,
+  actions,
+  slides,
+  publishedStats,
+  testID,
+}: DetailLayoutInterface) => {
   return (
     <div className="DetailLayout" data-testid={testID}>
       <Button variant="secondary" size="s" onClick={onBack}>
         ← Terug naar overzicht
       </Button>
 
-      <h2 className="DetailLayout__title">{title}</h2>
+      <div className="DetailLayout__header">
+        <h2 className="DetailLayout__title">{title}</h2>
+        <p className="DetailLayout__meta">
+          Ingezonden op {submittedAt} · {confessionId}
+        </p>
+      </div>
 
       <ConfessionDetails {...details} />
       <ConfessionActions {...actions} />

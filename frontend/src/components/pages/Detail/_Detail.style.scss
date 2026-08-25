@@ -1,2 +1,10 @@
 .Detail {
+  &__error {
+    color: var(--danger);
+    margin: 16px 0;
+  }
+
+  &__status {
+    color: var(--text);
+  }
 }

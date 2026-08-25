@@ -4,9 +4,21 @@
   gap: 24px;
   max-width: 640px;
 
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   &__title {
     margin: 0;
     font-size: 22px;
     color: var(--text-h);
+  }
+
+  &__meta {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
   }
 }

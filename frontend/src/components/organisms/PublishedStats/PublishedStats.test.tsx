@@ -6,16 +6,18 @@ import { PublishedStatsMock } from './PublishedStats.mock'
 const testID = 'PublishedStats-' + Math.floor(Math.random() * 90000 + 10000)
 
 describe('PublishedStats', () => {
-  it('toont een placeholder wanneer er nog geen Instagram-link is', () => {
+  it('toont een leeg, bewerkbaar veld wanneer er nog geen Instagram-link is', () => {
     const rendered = renderToStaticMarkup(<PublishedStats testID={testID} {...PublishedStatsMock} />)
     expect(rendered).toContain(`data-testid="${testID}"`)
-    expect(rendered).toContain('Nog geen Instagram-link ingesteld.')
+    expect(rendered).not.toContain('Bekijk op Instagram')
+    expect(rendered).toContain('Instagram-link')
   })
 
-  it('toont een link wanneer er wel een Instagram-URL is', () => {
+  it('toont ook een directe link wanneer er wel een Instagram-URL is', () => {
     const rendered = renderToStaticMarkup(
       <PublishedStats testID={testID} {...PublishedStatsMock} instagramPostUrl="https://instagram.com/p/x" />,
     )
     expect(rendered).toContain('href="https://instagram.com/p/x"')
+    expect(rendered).toContain('value="https://instagram.com/p/x"')
   })
 })
