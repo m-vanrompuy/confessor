@@ -10,12 +10,12 @@ describe('ConfessionDetails', () => {
     const rendered = renderToStaticMarkup(<ConfessionDetails testID={testID} {...ConfessionDetailsMock} />)
     expect(rendered).toContain(`data-testid="${testID}"`)
     expect(rendered).toContain(ConfessionDetailsMock.text)
-    expect(rendered).toContain('Bericht van de indiener aan de admin')
+    expect(rendered).toContain('Bericht aan de admin')
     expect(rendered).toContain('meme')
   })
 
   it('toont geen privébericht-blok wanneer er geen is', () => {
     const rendered = renderToStaticMarkup(<ConfessionDetails testID={testID} {...ConfessionDetailsMock} adminMessage={null} />)
-    expect(rendered).not.toContain('Bericht van de indiener aan de admin')
+    expect(rendered).not.toContain('Bericht aan de admin')
   })
 })
