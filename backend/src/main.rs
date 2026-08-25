@@ -2,7 +2,6 @@ use axum::Router;
 use axum::http::HeaderValue;
 use axum::http::Method;
 use axum::http::header::CONTENT_TYPE;
-use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::post;
 use axum::routing::put;
@@ -31,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/confessions", get(routes::confessions::list_confessions))
         .route(
             "/confessions/{id}",
-            delete(routes::confessions::delete_confession),
+            get(routes::confessions::get_confession).delete(routes::confessions::delete_confession),
         )
         .route(
             "/confessions/{id}/use",
