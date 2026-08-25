@@ -52,6 +52,17 @@ pub async fn list_confessions(
     Ok(Json(confessions))
 }
 
+/// HTTP-handler voor GET /confessions/{id} - voor de Detail-pagina (issue #92).
+pub async fn get_confession(Path(confession_id): Path<String>) -> Result<Json<Confession>, (StatusCode, String)> {
+    let db = firestore::make_firestore_client()
+        .await
+        .map_err(internal_error)?;
+
+    let confession = fetch_confession_or_404(&db, &confession_id).await?;
+
+    Ok(Json(confession))
+}
+
 #[derive(Deserialize)]
 pub struct UpdateConfessionTagsRequest {
     tag_ids: Vec<String>,
