@@ -120,6 +120,13 @@ export function confessionSlideUrl(confessionId: string, slideIndex: number): st
   return `${API_BASE_URL}/confessions/${confessionId}/slides/${slideIndex}`
 }
 
+// GET /confessions/{id}/memes/{index} - de originele, door de inzender
+// geüploade meme-bijlage (issue #109), niet als JSON maar rechtstreeks als
+// <img src> gebruikt. Index is 1-based, zelfde volgorde als meme_attachments.
+export function confessionMemeUrl(confessionId: string, memeIndex: number): string {
+  return `${API_BASE_URL}/confessions/${confessionId}/memes/${memeIndex}`
+}
+
 export interface SyncResult {
   new_confessions_count: number
 }

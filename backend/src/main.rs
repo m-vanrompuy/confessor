@@ -52,6 +52,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/confessions/{id}/slides/{index}",
             get(routes::confessions::get_confession_slide),
         )
+        .route(
+            "/confessions/{id}/memes/{index}",
+            get(routes::confessions::get_confession_meme),
+        )
         .route("/tags", get(routes::tags::list_tags).post(routes::tags::create_tag))
         .route(
             "/tags/{id}",

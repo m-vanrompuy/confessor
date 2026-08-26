@@ -1,0 +1,13 @@
+.MemePreview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+
+  &__image {
+    width: 100%;
+    max-width: 220px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+}
