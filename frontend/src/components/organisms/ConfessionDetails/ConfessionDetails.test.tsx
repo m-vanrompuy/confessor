@@ -18,4 +18,14 @@ describe('ConfessionDetails', () => {
     const rendered = renderToStaticMarkup(<ConfessionDetails testID={testID} {...ConfessionDetailsMock} adminMessage={null} />)
     expect(rendered).not.toContain('Bericht aan de admin')
   })
+
+  it('toont de originele meme-bijlage wanneer die er is', () => {
+    const rendered = renderToStaticMarkup(<ConfessionDetails testID={testID} {...ConfessionDetailsMock} />)
+    expect(rendered).toContain(`src="${ConfessionDetailsMock.memeUrls[0]}"`)
+  })
+
+  it('toont geen meme-sectie wanneer er geen bijlage is', () => {
+    const rendered = renderToStaticMarkup(<ConfessionDetails testID={testID} {...ConfessionDetailsMock} memeUrls={[]} />)
+    expect(rendered).not.toContain('ConfessionDetails__memes')
+  })
 })

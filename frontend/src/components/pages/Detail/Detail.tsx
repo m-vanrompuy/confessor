@@ -12,6 +12,7 @@ import {
   updateConfessionTags,
   updateConfessionStats,
   confessionSlideUrl,
+  confessionMemeUrl,
 } from '../../../api/confessions'
 import type { Confession } from '../../../api/confessions'
 import { listTags } from '../../../api/tags'
@@ -170,6 +171,7 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
         details={{
           text: confession.text,
           adminMessage: confession.admin_message,
+          memeUrls: confession.meme_attachments.map((_, index) => confessionMemeUrl(confession.id, index + 1)),
           assignedTags,
           availableTags,
           onToggleTag: handleToggleTag,

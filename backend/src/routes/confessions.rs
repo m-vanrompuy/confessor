@@ -340,6 +340,39 @@ fn slide_path_or_404(confession: &Confession, slide_index: usize) -> Result<&str
         ))
 }
 
+/// HTTP-handler voor GET /confessions/{id}/memes/{index} (issue #109). Index is
+/// 1-based, zelfde volgorde als `meme_attachments`. Toont de originele, door de
+/// inzender geüploade bijlage - dus vóór compositing in een gegenereerde slide,
+/// en met de écht opgeslagen content-type (memes zijn niet altijd PNG).
+pub async fn get_confession_meme(
+    Path((confession_id, meme_index)): Path<(String, usize)>,
+) -> Result<([(header::HeaderName, String); 1], Vec<u8>), (StatusCode, String)> {
+    let db = firestore::make_firestore_client().await.map_err(internal_error)?;
+
+    let confession = fetch_confession_or_404(&db, &confession_id).await?;
+    let attachment = meme_attachment_or_404(&confession, meme_index)?;
+
+    let bytes = storage::download_object(&attachment.storage_path)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(([(header::CONTENT_TYPE, attachment.content_type.clone())], bytes))
+}
+
+fn meme_attachment_or_404(
+    confession: &Confession,
+    meme_index: usize,
+) -> Result<&firestore::MemeAttachment, (StatusCode, String)> {
+    if meme_index == 0 {
+        return Err((StatusCode::BAD_REQUEST, "meme-index start bij 1".to_string()));
+    }
+
+    confession
+        .meme_attachments
+        .get(meme_index - 1)
+        .ok_or((StatusCode::NOT_FOUND, "meme-bijlage niet gevonden".to_string()))
+}
+
 async fn fetch_confession_or_404(
     db: &::firestore::FirestoreDb,
     confession_id: &str,
