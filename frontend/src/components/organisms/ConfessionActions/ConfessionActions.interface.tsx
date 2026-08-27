@@ -5,8 +5,11 @@ export interface ConfessionActionsInterface {
   onMarkAsUsed: () => void
   onDelete: () => void
   onGenerate: () => void
+  /** Enkel relevant/zichtbaar wanneer status "deleted" is (issue #100). */
+  onRestore: () => void
   markingAsUsed?: boolean
   deleting?: boolean
   generating?: boolean
+  restoring?: boolean
   testID?: string
 }

@@ -22,11 +22,23 @@ describe('ConfessionActions', () => {
     expect(isGenerateDisabled(rendered)).toBe(false)
   })
 
-  it('houdt Markeer als gebruikt en Verwijderen disabled voor een verwijderde confession', () => {
+  it('houdt Markeer als gebruikt en Genereren disabled voor een verwijderde confession', () => {
     const rendered = renderToStaticMarkup(<ConfessionActions testID={testID} {...ConfessionActionsMock} status="deleted" />)
     expect(rendered).toContain(`data-testid="${testID}"`)
     // Beide knoppen moeten disabled zijn - drie knoppen totaal, dus minstens
     // twee disabled-attributen verwacht.
     expect((rendered.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('toont Herstel i.p.v. Verwijderen voor een verwijderde confession', () => {
+    const rendered = renderToStaticMarkup(<ConfessionActions testID={testID} {...ConfessionActionsMock} status="deleted" />)
+    expect(rendered).toContain('Herstel')
+    expect(rendered).not.toContain('Verwijderen')
+  })
+
+  it('toont Verwijderen i.p.v. Herstel voor een niet-verwijderde confession', () => {
+    const rendered = renderToStaticMarkup(<ConfessionActions testID={testID} {...ConfessionActionsMock} status="new" />)
+    expect(rendered).toContain('Verwijderen')
+    expect(rendered).not.toContain('Herstel')
   })
 })

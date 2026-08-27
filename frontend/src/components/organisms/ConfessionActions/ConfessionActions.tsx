@@ -6,9 +6,11 @@ const ConfessionActions = ({
   onMarkAsUsed,
   onDelete,
   onGenerate,
+  onRestore,
   markingAsUsed = false,
   deleting = false,
   generating = false,
+  restoring = false,
   testID,
 }: ConfessionActionsInterface) => {
   const isDeleted = status === 'deleted'
@@ -30,9 +32,15 @@ const ConfessionActions = ({
       >
         {generating ? 'Bezig...' : 'Genereer afbeeldingen'}
       </Button>
-      <Button variant="danger" onClick={onDelete} disabled={isDeleted || deleting}>
-        {deleting ? 'Bezig...' : 'Verwijderen'}
-      </Button>
+      {isDeleted ? (
+        <Button variant="secondary" onClick={onRestore} disabled={restoring}>
+          {restoring ? 'Bezig...' : 'Herstel'}
+        </Button>
+      ) : (
+        <Button variant="danger" onClick={onDelete} disabled={deleting}>
+          {deleting ? 'Bezig...' : 'Verwijderen'}
+        </Button>
+      )}
     </div>
   )
 }

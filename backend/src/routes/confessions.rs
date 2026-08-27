@@ -2,6 +2,7 @@
 
 use crate::business::caption;
 use crate::business::numbering::determine_next_sequence_number;
+use crate::business::restore::find_matching_row;
 use crate::business::tagging::dedupe_tag_ids;
 use crate::business::template::{split_text_into_slides, wrap_paragraph_into_lines};
 use crate::business::tombstone::build_tombstoned_content;
@@ -15,6 +16,7 @@ use crate::model::image_render;
 use crate::model::image_render::MemeInput;
 use crate::model::image_render::MemePosition;
 use crate::model::image_render::SlideRenderInput;
+use crate::model::sheets;
 use crate::model::storage;
 use axum::Json;
 use axum::extract::Path;
@@ -108,6 +110,42 @@ pub async fn delete_confession(
         .map_err(internal_error)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// HTTP-handler voor PUT /confessions/{id}/restore (issue #100). Haalt de
+/// originele tekst terug uit de Sheet - delete raakt de Sheet nooit aan, enkel
+/// Firestore - en zet de confession terug op "new", alsof ze net opnieuw gesynct
+/// is. Volgnummer, tags, gegenereerde afbeeldingen en stats blijven gewist; die
+/// ontstaan pas weer via de normale flow (markeren als gebruikt, genereren, ...).
+pub async fn restore_confession(
+    Path(confession_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let db = firestore::make_firestore_client()
+        .await
+        .map_err(internal_error)?;
+
+    let confession = fetch_confession_or_404(&db, &confession_id).await?;
+    require_deleted_status(&confession)?;
+
+    let raw_rows = sheets::fetch_raw_rows().await.map_err(internal_error)?;
+    let rows = sheets::parse_rows(&raw_rows);
+    let matching_row = find_matching_row(&rows, &confession_id).ok_or((
+        StatusCode::NOT_FOUND,
+        "originele tekst niet meer teruggevonden in de Sheet".to_string(),
+    ))?;
+
+    firestore::restore_confession(&db, &confession_id, matching_row)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn require_deleted_status(confession: &Confession) -> Result<(), (StatusCode, String)> {
+    if confession.status != "deleted" {
+        return Err((StatusCode::BAD_REQUEST, "enkel verwijderde confessions kunnen hersteld worden".to_string()));
+    }
+    Ok(())
 }
 
 async fn delete_confession_storage_objects(confession: &Confession) -> Result<(), Box<dyn std::error::Error>> {

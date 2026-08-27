@@ -5,4 +5,5 @@ export const ConfessionActionsMock: ConfessionActionsInterface = {
   onMarkAsUsed: () => {},
   onDelete: () => {},
   onGenerate: () => {},
+  onRestore: () => {},
 }

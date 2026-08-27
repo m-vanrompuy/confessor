@@ -37,6 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             put(routes::confessions::mark_confession_as_used),
         )
         .route(
+            "/confessions/{id}/restore",
+            put(routes::confessions::restore_confession),
+        )
+        .route(
             "/confessions/{id}/tags",
             put(routes::confessions::update_confession_tags),
         )
