@@ -4,6 +4,10 @@ target/
 node_modules/
 frontend/dist/
 
+# atomic-bomb genereert dit standaard, maar het scant `// TODO:`-comments (die
+# elk scaffold-bestand bevat) en zou bij elke push GitHub Issues aanmaken.
+frontend/.github/
+
 # Geheimen — nooit committen
 secrets/
 *.pem
