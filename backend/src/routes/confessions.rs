@@ -56,14 +56,21 @@ pub async fn list_confessions(
 }
 
 /// HTTP-handler voor GET /confessions/{id} - voor de Detail-pagina (issue #92).
+/// Haalt ook best-effort de meme(s) op uit Drive als dat nog niet eerder gebeurde
+/// (issue #114) - anders toont de meme-preview van #109 pas iets zodra er al
+/// afbeeldingen gegenereerd zijn, wat net het doel mist (vóór het genereren al
+/// kunnen zien wat er precies is ingestuurd). `ensure_memes_stored` is zelf al
+/// idempotent/no-op zodra `meme_attachments` niet leeg is, dus dit kost geen
+/// extra Drive-aanroepen bij herhaald bekijken.
 pub async fn get_confession(Path(confession_id): Path<String>) -> Result<Json<Confession>, (StatusCode, String)> {
     let db = firestore::make_firestore_client()
         .await
         .map_err(internal_error)?;
 
     let confession = fetch_confession_or_404(&db, &confession_id).await?;
+    let meme_attachments = ensure_memes_stored(&db, &confession).await;
 
-    Ok(Json(confession))
+    Ok(Json(Confession { meme_attachments, ..confession }))
 }
 
 #[derive(Deserialize)]
