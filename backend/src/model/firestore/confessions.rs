@@ -210,25 +210,41 @@ pub async fn update_confession_tags(
     Ok(())
 }
 
-/// blijft ongewijzigd, alle inhoud wordt gewist (zie business::tombstone).
+/// `title` blijft ongewijzigd (staat niet in TombstonedContent) - alle andere
+/// inhoud, gegenereerde afbeeldingen en statistieken worden gewist (issue #99, zie
+/// business::tombstone). De storage-objecten zelf worden vóór deze aanroep al
+/// verwijderd door de caller (routes/confessions.rs).
 pub async fn delete_confession(
     db: &FirestoreDb,
     confession_id: &str,
     tombstoned_content: crate::business::tombstone::TombstonedContent,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
-        title: tombstoned_content.title,
+        status: tombstoned_content.status,
         text: tombstoned_content.text,
         admin_message: tombstoned_content.admin_message,
         image_link: tombstoned_content.image_link,
-        status: tombstoned_content.status,
         tag_ids: tombstoned_content.tag_ids,
+        slide_paths: tombstoned_content.slide_paths,
+        suggested_caption: tombstoned_content.suggested_caption,
+        meme_attachments: tombstoned_content.meme_attachments,
+        sequence_number: tombstoned_content.sequence_number,
+        used_at: tombstoned_content.used_at,
+        like_count: tombstoned_content.like_count,
+        comment_count: tombstoned_content.comment_count,
+        stats_last_updated_at: tombstoned_content.stats_last_updated_at,
+        instagram_post_url: tombstoned_content.instagram_post_url,
         ..Default::default()
     };
 
     db.fluent()
         .update()
-        .fields(paths!(Confession::{title, text, admin_message, image_link, status, tag_ids}))
+        .fields(paths!(Confession::{
+            status, text, admin_message, image_link, tag_ids,
+            slide_paths, suggested_caption, meme_attachments,
+            sequence_number, used_at, like_count, comment_count,
+            stats_last_updated_at, instagram_post_url
+        }))
         .in_col(CONFESSIONS_COLLECTION)
         .document_id(confession_id)
         .object(&placeholder_confession)

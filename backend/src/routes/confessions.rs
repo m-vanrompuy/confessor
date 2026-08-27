@@ -5,6 +5,7 @@ use crate::business::numbering::determine_next_sequence_number;
 use crate::business::tagging::dedupe_tag_ids;
 use crate::business::template::{split_text_into_slides, wrap_paragraph_into_lines};
 use crate::business::tombstone::build_tombstoned_content;
+use crate::business::tombstone::storage_paths_to_delete;
 use crate::model::drive;
 use crate::model::firestore;
 use crate::model::firestore::Confession;
@@ -86,7 +87,10 @@ pub async fn update_confession_tags(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// HTTP-handler voor DELETE /confessions/{id}. Past het tombstone-pattern toe.
+/// HTTP-handler voor DELETE /confessions/{id}. Past het tombstone-pattern toe:
+/// verwijdert eerst de storage-objecten (slides + originele memes, issue #99), en
+/// wist pas daarna de Firestore-inhoud - zo blijft de confession nog gewoon
+/// zichtbaar/opnieuw te proberen als de storage-opruiming faalt.
 pub async fn delete_confession(
     Path(confession_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
@@ -94,13 +98,23 @@ pub async fn delete_confession(
         .await
         .map_err(internal_error)?;
 
-    let tombstoned_content = build_tombstoned_content();
+    let confession = fetch_confession_or_404(&db, &confession_id).await?;
 
+    delete_confession_storage_objects(&confession).await.map_err(internal_error)?;
+
+    let tombstoned_content = build_tombstoned_content();
     firestore::delete_confession(&db, &confession_id, tombstoned_content)
         .await
         .map_err(internal_error)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_confession_storage_objects(confession: &Confession) -> Result<(), Box<dyn std::error::Error>> {
+    for object_path in storage_paths_to_delete(confession) {
+        storage::delete_object(&object_path).await?;
+    }
+    Ok(())
 }
 
 /// HTTP-handler voor PUT /confessions/{id}/use. Kent het volgende volgnummer toe
@@ -474,4 +488,95 @@ fn parse_tag_filter(tags: &Option<String>) -> Option<Vec<String>> {
 
 fn internal_error(error: Box<dyn std::error::Error>) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::firestore::MemeAttachment;
+    use chrono::Utc;
+
+    /// Integratietest tegen echte Firestore + Storage (issue #99, zelfde stijl als
+    /// model::storage::tests) - zet een synthetische confession neer met slides,
+    /// een meme en gepubliceerde stats, roept de echte DELETE-flow aan, en ruimt
+    /// zichzelf hoe dan ook op, ook als een assertie faalt.
+    #[tokio::test]
+    async fn delete_confession_wipes_content_but_keeps_the_title() {
+        dotenvy::dotenv().ok();
+        // Firestore's gRPC-verbinding heeft rustls nodig - normaal geïnstalleerd in
+        // main() bij opstart, maar `cargo test` roept main() nooit aan. .ok() omdat
+        // een tweede install (bij meerdere Firestore-tests) een Err teruggeeft.
+        rustls::crypto::ring::default_provider().install_default().ok();
+
+        let db = firestore::make_firestore_client().await.expect("firestore client");
+        let confession_id = "test-issue-99-delete-flow";
+        let slide_path = "test/issue-99-fake-slide.png";
+        let meme_path = "test/issue-99-fake-meme.png";
+
+        let one_pixel_png: Vec<u8> = vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00,
+            0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+            0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        storage::upload_png(slide_path, one_pixel_png.clone()).await.expect("upload slide");
+        storage::upload_png(meme_path, one_pixel_png).await.expect("upload meme");
+
+        let synthetic_confession = Confession {
+            id: confession_id.to_string(),
+            timestamp: "1-1-2026 00:00:00".to_string(),
+            title: "Titel die moet blijven".to_string(),
+            text: "Tekst die gewist moet worden".to_string(),
+            status: "used".to_string(),
+            tag_ids: vec!["tag-1".to_string()],
+            sequence_number: Some(999),
+            suggested_caption: Some("caption".to_string()),
+            slide_paths: vec![slide_path.to_string()],
+            used_at: Some(Utc::now()),
+            like_count: Some(5),
+            comment_count: Some(2),
+            meme_attachments: vec![MemeAttachment { storage_path: meme_path.to_string(), content_type: "image/png".to_string() }],
+            ..Default::default()
+        };
+
+        db.fluent()
+            .insert()
+            .into(firestore::CONFESSIONS_COLLECTION)
+            .document_id(confession_id)
+            .object(&synthetic_confession)
+            .execute::<Confession>()
+            .await
+            .expect("insert synthetic confession");
+
+        let delete_result = delete_confession(Path(confession_id.to_string())).await;
+        let after_delete = firestore::fetch_confession_by_id(&db, confession_id).await;
+
+        // Opruimen vóór de asserts - het echte Firestore-document mag hoe dan ook niet
+        // blijven staan, ook al faalt een assertie hieronder.
+        db.fluent()
+            .delete()
+            .from(firestore::CONFESSIONS_COLLECTION)
+            .document_id(confession_id)
+            .execute()
+            .await
+            .expect("cleanup: synthetic document verwijderen");
+
+        assert!(delete_result.is_ok(), "delete_confession zou moeten lukken: {:?}", delete_result.err());
+
+        let after_delete = after_delete.expect("refetch mag niet falen").expect("confession moet getombstoned zijn, niet weg");
+        assert_eq!(after_delete.title, "Titel die moet blijven");
+        assert_eq!(after_delete.status, "deleted");
+        assert_eq!(after_delete.text, "");
+        assert!(after_delete.tag_ids.is_empty());
+        assert!(after_delete.slide_paths.is_empty());
+        assert!(after_delete.suggested_caption.is_none());
+        assert!(after_delete.meme_attachments.is_empty());
+        assert!(after_delete.sequence_number.is_none());
+        assert!(after_delete.used_at.is_none());
+        assert!(after_delete.like_count.is_none());
+        assert!(after_delete.comment_count.is_none());
+
+        assert!(storage::download_object(slide_path).await.is_err(), "slide had verwijderd moeten zijn uit storage");
+        assert!(storage::download_object(meme_path).await.is_err(), "meme had verwijderd moeten zijn uit storage");
+    }
 }
