@@ -74,6 +74,12 @@ export function markConfessionAsUsed(confessionId: string): Promise<void> {
   return apiFetch<void>(`/confessions/${confessionId}/use`, { method: 'PUT' })
 }
 
+// PUT /confessions/{id}/restore - haalt de originele tekst terug uit de Sheet en
+// zet de confession terug op "new" (issue #100).
+export function restoreConfession(confessionId: string): Promise<void> {
+  return apiFetch<void>(`/confessions/${confessionId}/restore`, { method: 'PUT' })
+}
+
 export interface ConfessionStats {
   like_count: number
   comment_count: number

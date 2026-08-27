@@ -8,6 +8,7 @@ import {
   getConfession,
   deleteConfession,
   markConfessionAsUsed,
+  restoreConfession,
   generateConfessionImages,
   updateConfessionTags,
   updateConfessionStats,
@@ -91,6 +92,7 @@ interface DetailContentProps {
 const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailContentProps) => {
   const { loading: markingAsUsed, error: markAsUsedError, run: runMarkAsUsed } = useApiRequest(markConfessionAsUsed)
   const { loading: deleting, error: deleteError, run: runDelete } = useApiRequest(deleteConfession)
+  const { loading: restoring, error: restoreError, run: runRestore } = useApiRequest(restoreConfession)
   const { loading: generating, error: generateError, run: runGenerate } = useApiRequest(generateConfessionImages)
   const { error: tagUpdateError, run: runUpdateTags } = useApiRequest(updateConfessionTags)
   const { loading: savingStats, error: statsError, run: runUpdateStats } = useApiRequest(updateConfessionStats)
@@ -118,6 +120,15 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
       onRefetch()
     } catch {
       // fout staat al in markAsUsedError.
+    }
+  }
+
+  const handleRestore = async () => {
+    try {
+      await runRestore(confession.id)
+      onRefetch()
+    } catch {
+      // fout staat al in restoreError.
     }
   }
 
@@ -154,7 +165,7 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
 
   const availableTags = tags.map((tag) => ({ id: tag.id ?? tag.name, name: tag.name, color: tag.color }))
   const assignedTags = availableTags.filter((tag) => confession.tag_ids.includes(tag.id))
-  const actionError = markAsUsedError ?? deleteError ?? generateError ?? tagUpdateError ?? statsError
+  const actionError = markAsUsedError ?? deleteError ?? restoreError ?? generateError ?? tagUpdateError ?? statsError
 
   return (
     <div className="Detail" data-testid={testID}>
@@ -181,9 +192,11 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
           onMarkAsUsed: handleMarkAsUsed,
           onDelete: handleDelete,
           onGenerate: handleGenerate,
+          onRestore: handleRestore,
           markingAsUsed,
           deleting,
           generating,
+          restoring,
         }}
         slides={{
           slideUrls: confession.slide_paths.map((_, index) => confessionSlideUrl(confession.id, index + 1)),

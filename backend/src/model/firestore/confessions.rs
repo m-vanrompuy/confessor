@@ -254,6 +254,35 @@ pub async fn delete_confession(
     Ok(())
 }
 
+/// Zet een tombstoned confession terug op "new" met de originele tekst uit de
+/// Sheet (issue #100) - alsof ze net opnieuw gesynct is. Volgnummer, tags,
+/// gegenereerde afbeeldingen en stats blijven gewist; die worden pas opnieuw
+/// aangemaakt via de normale flow.
+pub async fn restore_confession(
+    db: &FirestoreDb,
+    confession_id: &str,
+    row: &RawConfessionRow,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        status: "new".to_string(),
+        text: row.text.clone(),
+        admin_message: row.admin_message.clone(),
+        image_link: row.image_link.clone(),
+        ..Default::default()
+    };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{status, text, admin_message, image_link}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
 pub async fn save_generated_images(
     db: &FirestoreDb,
     confession_id: &str,

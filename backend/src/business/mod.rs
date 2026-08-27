@@ -8,3 +8,4 @@ pub mod tombstone;
 pub mod settings;
 pub mod caption;
 pub mod cleanup;
+pub mod restore;
