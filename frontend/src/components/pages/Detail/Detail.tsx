@@ -9,6 +9,7 @@ import {
   deleteConfession,
   markConfessionAsUsed,
   restoreConfession,
+  unmarkConfessionAsUsed,
   generateConfessionImages,
   updateConfessionTags,
   updateConfessionStats,
@@ -93,6 +94,7 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
   const { loading: markingAsUsed, error: markAsUsedError, run: runMarkAsUsed } = useApiRequest(markConfessionAsUsed)
   const { loading: deleting, error: deleteError, run: runDelete } = useApiRequest(deleteConfession)
   const { loading: restoring, error: restoreError, run: runRestore } = useApiRequest(restoreConfession)
+  const { loading: unmarking, error: unmarkError, run: runUnmark } = useApiRequest(unmarkConfessionAsUsed)
   const { loading: generating, error: generateError, run: runGenerate } = useApiRequest(generateConfessionImages)
   const { error: tagUpdateError, run: runUpdateTags } = useApiRequest(updateConfessionTags)
   const { loading: savingStats, error: statsError, run: runUpdateStats } = useApiRequest(updateConfessionStats)
@@ -132,6 +134,15 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
     }
   }
 
+  const handleUnmark = async () => {
+    try {
+      await runUnmark(confession.id)
+      onRefetch()
+    } catch {
+      // fout staat al in unmarkError.
+    }
+  }
+
   const handleDelete = async () => {
     try {
       await runDelete(confession.id)
@@ -165,7 +176,7 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
 
   const availableTags = tags.map((tag) => ({ id: tag.id ?? tag.name, name: tag.name, color: tag.color }))
   const assignedTags = availableTags.filter((tag) => confession.tag_ids.includes(tag.id))
-  const actionError = markAsUsedError ?? deleteError ?? restoreError ?? generateError ?? tagUpdateError ?? statsError
+  const actionError = markAsUsedError ?? deleteError ?? restoreError ?? unmarkError ?? generateError ?? tagUpdateError ?? statsError
 
   return (
     <div className="Detail" data-testid={testID}>
@@ -193,10 +204,13 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
           onDelete: handleDelete,
           onGenerate: handleGenerate,
           onRestore: handleRestore,
+          onUnmark: handleUnmark,
+          hasGeneratedSlides: confession.slide_paths.length > 0,
           markingAsUsed,
           deleting,
           generating,
           restoring,
+          unmarking,
         }}
         slides={{
           slideUrls: confession.slide_paths.map((_, index) => confessionSlideUrl(confession.id, index + 1)),

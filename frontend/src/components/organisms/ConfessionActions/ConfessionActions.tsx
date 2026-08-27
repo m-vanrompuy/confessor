@@ -7,20 +7,30 @@ const ConfessionActions = ({
   onDelete,
   onGenerate,
   onRestore,
+  onUnmark,
+  hasGeneratedSlides,
   markingAsUsed = false,
   deleting = false,
   generating = false,
   restoring = false,
+  unmarking = false,
   testID,
 }: ConfessionActionsInterface) => {
   const isDeleted = status === 'deleted'
   const isUsed = status === 'used'
+  const canUnmark = isUsed && !hasGeneratedSlides
 
   return (
     <div className="ConfessionActions" data-testid={testID}>
-      <Button variant="secondary" onClick={onMarkAsUsed} disabled={isDeleted || isUsed || markingAsUsed}>
-        {markingAsUsed ? 'Bezig...' : 'Markeer als gebruikt'}
-      </Button>
+      {canUnmark ? (
+        <Button variant="secondary" onClick={onUnmark} disabled={unmarking}>
+          {unmarking ? 'Bezig...' : 'Ongedaan maken'}
+        </Button>
+      ) : (
+        <Button variant="secondary" onClick={onMarkAsUsed} disabled={isDeleted || isUsed || markingAsUsed}>
+          {markingAsUsed ? 'Bezig...' : 'Markeer als gebruikt'}
+        </Button>
+      )}
       <Button
         variant="primary"
         onClick={onGenerate}

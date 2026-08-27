@@ -385,6 +385,24 @@ pub async fn mark_confession_as_used(
     Ok(())
 }
 
+/// Geeft het volgnummer vrij en zet de confession terug op "new" (issue #97) -
+/// voor per ongeluk op "Markeer als gebruikt" klikken. used_at wordt ook gewist,
+/// want die confession is niet meer "gebruikt" geweest.
+pub async fn unmark_confession_as_used(db: &FirestoreDb, confession_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession { status: "new".to_string(), sequence_number: None, used_at: None, ..Default::default() };
+
+    db.fluent()
+        .update()
+        .fields(paths!(Confession::{status, sequence_number, used_at}))
+        .in_col(CONFESSIONS_COLLECTION)
+        .document_id(confession_id)
+        .object(&placeholder_confession)
+        .execute::<Confession>()
+        .await?;
+
+    Ok(())
+}
+
 /// Wist de slide-referenties nadat hun Storage-objecten opgeruimd zijn (issue #61).
 /// used_at blijft staan - dat is de historische "wanneer gepubliceerd"-info, geen
 /// vervaldatum om te resetten.
