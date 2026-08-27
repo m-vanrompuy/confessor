@@ -80,6 +80,12 @@ export function restoreConfession(confessionId: string): Promise<void> {
   return apiFetch<void>(`/confessions/${confessionId}/restore`, { method: 'PUT' })
 }
 
+// PUT /confessions/{id}/unmark - geeft het volgnummer vrij en zet de confession
+// terug op "new" (issue #97), voor per ongeluk "Markeer als gebruikt" klikken.
+export function unmarkConfessionAsUsed(confessionId: string): Promise<void> {
+  return apiFetch<void>(`/confessions/${confessionId}/unmark`, { method: 'PUT' })
+}
+
 export interface ConfessionStats {
   like_count: number
   comment_count: number

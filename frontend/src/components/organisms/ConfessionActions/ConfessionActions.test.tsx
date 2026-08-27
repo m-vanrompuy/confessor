@@ -41,4 +41,20 @@ describe('ConfessionActions', () => {
     expect(rendered).toContain('Verwijderen')
     expect(rendered).not.toContain('Herstel')
   })
+
+  it('toont Ongedaan maken i.p.v. Markeer als gebruikt zolang er nog geen afbeeldingen gegenereerd zijn', () => {
+    const rendered = renderToStaticMarkup(
+      <ConfessionActions testID={testID} {...ConfessionActionsMock} status="used" hasGeneratedSlides={false} />,
+    )
+    expect(rendered).toContain('Ongedaan maken')
+    expect(rendered).not.toContain('Markeer als gebruikt')
+  })
+
+  it('toont Markeer als gebruikt i.p.v. Ongedaan maken zodra er al afbeeldingen gegenereerd zijn', () => {
+    const rendered = renderToStaticMarkup(
+      <ConfessionActions testID={testID} {...ConfessionActionsMock} status="used" hasGeneratedSlides={true} />,
+    )
+    expect(rendered).toContain('Markeer als gebruikt')
+    expect(rendered).not.toContain('Ongedaan maken')
+  })
 })

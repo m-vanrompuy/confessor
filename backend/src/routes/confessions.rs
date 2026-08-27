@@ -177,6 +177,47 @@ pub async fn mark_confession_as_used(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// HTTP-handler voor PUT /confessions/{id}/unmark (issue #97) - voor per ongeluk
+/// op "Markeer als gebruikt" klikken. Geeft het volgnummer vrij en zet de
+/// confession terug op "new". Enkel toegestaan zolang er nog geen afbeeldingen
+/// gegenereerd zijn - die tonen het volgnummer al in de afbeelding zelf, dus zou
+/// vrijgeven na het genereren een verkeerd/dubbel nummer opleveren (gebruik dan
+/// Verwijderen).
+pub async fn unmark_confession_as_used(
+    Path(confession_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let db = firestore::make_firestore_client()
+        .await
+        .map_err(internal_error)?;
+
+    let confession = fetch_confession_or_404(&db, &confession_id).await?;
+    require_used_status(&confession)?;
+    require_no_generated_slides(&confession)?;
+
+    firestore::unmark_confession_as_used(&db, &confession_id)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn require_used_status(confession: &Confession) -> Result<(), (StatusCode, String)> {
+    if confession.status != "used" {
+        return Err((StatusCode::BAD_REQUEST, "enkel gebruikte confessions kunnen ongedaan gemaakt worden".to_string()));
+    }
+    Ok(())
+}
+
+fn require_no_generated_slides(confession: &Confession) -> Result<(), (StatusCode, String)> {
+    if !confession.slide_paths.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "er zijn al afbeeldingen gegenereerd met dit volgnummer - gebruik Verwijderen i.p.v. ongedaan maken".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 pub struct UpdateStatsRequest {
     like_count: u32,
@@ -616,5 +657,72 @@ mod tests {
 
         assert!(storage::download_object(slide_path).await.is_err(), "slide had verwijderd moeten zijn uit storage");
         assert!(storage::download_object(meme_path).await.is_err(), "meme had verwijderd moeten zijn uit storage");
+    }
+
+    #[test]
+    fn require_used_status_rejects_anything_but_used() {
+        let new_confession = Confession { status: "new".to_string(), ..Default::default() };
+        let used_confession = Confession { status: "used".to_string(), ..Default::default() };
+
+        assert!(require_used_status(&new_confession).is_err());
+        assert!(require_used_status(&used_confession).is_ok());
+    }
+
+    #[test]
+    fn require_no_generated_slides_rejects_once_slides_exist() {
+        let without_slides = Confession::default();
+        let with_slides = Confession { slide_paths: vec!["confessions/x/slide-1.png".to_string()], ..Default::default() };
+
+        assert!(require_no_generated_slides(&without_slides).is_ok());
+        assert!(require_no_generated_slides(&with_slides).is_err());
+    }
+
+    /// Integratietest tegen echte Firestore (issue #97) - zet een synthetische
+    /// "used"-confession neer, roept de echte unmark-flow aan, en ruimt zichzelf op.
+    #[tokio::test]
+    async fn unmark_confession_as_used_frees_the_sequence_number() {
+        dotenvy::dotenv().ok();
+        rustls::crypto::ring::default_provider().install_default().ok();
+
+        let db = firestore::make_firestore_client().await.expect("firestore client");
+        let confession_id = "test-issue-97-unmark-flow";
+
+        let synthetic_confession = Confession {
+            id: confession_id.to_string(),
+            timestamp: "1-1-2026 00:00:00".to_string(),
+            title: "Titel blijft".to_string(),
+            status: "used".to_string(),
+            sequence_number: Some(999),
+            used_at: Some(Utc::now()),
+            ..Default::default()
+        };
+
+        db.fluent()
+            .insert()
+            .into(firestore::CONFESSIONS_COLLECTION)
+            .document_id(confession_id)
+            .object(&synthetic_confession)
+            .execute::<Confession>()
+            .await
+            .expect("insert synthetic confession");
+
+        let unmark_result = unmark_confession_as_used(Path(confession_id.to_string())).await;
+        let after_unmark = firestore::fetch_confession_by_id(&db, confession_id).await;
+
+        db.fluent()
+            .delete()
+            .from(firestore::CONFESSIONS_COLLECTION)
+            .document_id(confession_id)
+            .execute()
+            .await
+            .expect("cleanup: synthetic document verwijderen");
+
+        assert!(unmark_result.is_ok(), "unmark zou moeten lukken: {:?}", unmark_result.err());
+
+        let after_unmark = after_unmark.expect("refetch mag niet falen").expect("confession moet nog bestaan");
+        assert_eq!(after_unmark.status, "new");
+        assert!(after_unmark.sequence_number.is_none());
+        assert!(after_unmark.used_at.is_none());
+        assert_eq!(after_unmark.title, "Titel blijft");
     }
 }
