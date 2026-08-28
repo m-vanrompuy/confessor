@@ -1,4 +1,5 @@
 import TagManager from '../../organisms/TagManager'
+import { SequenceNumberSetting } from '../../molecules'
 import type { InstellingenLayoutInterface, InstellingenTab } from './InstellingenLayout.interface'
 
 const TABS: { id: InstellingenTab; label: string }[] = [
@@ -7,11 +8,11 @@ const TABS: { id: InstellingenTab; label: string }[] = [
   { id: 'algemeen', label: 'Algemeen' },
 ]
 
-// Enkel de Tags & categorieën-tab heeft echte content (issue #37/#38, scherp
-// gescoped op tagbeheer) - Template/Algemeen blijven zichtbaar in de
-// tab-strip (zodat duidelijk is dat ze gepland zijn) maar tonen een
-// placeholder tot ze gebouwd worden.
-const InstellingenLayout = ({ activeTab, onTabChange, tagManager, testID }: InstellingenLayoutInterface) => {
+// Tags & categorieën (issue #37/#38) en Algemeen (issue #116, het instelbare
+// volgnummer) hebben echte content - Template blijft zichtbaar in de tab-strip
+// (zodat duidelijk is dat 'ie gepland is) maar toont een placeholder tot 'ie
+// gebouwd wordt.
+const InstellingenLayout = ({ activeTab, onTabChange, tagManager, sequenceNumberSetting, testID }: InstellingenLayoutInterface) => {
   return (
     <div className="InstellingenLayout" data-testid={testID}>
       <div className="InstellingenLayout__tabs" role="tablist">
@@ -31,7 +32,8 @@ const InstellingenLayout = ({ activeTab, onTabChange, tagManager, testID }: Inst
 
       <div className="InstellingenLayout__content">
         {activeTab === 'tags' && <TagManager {...tagManager} />}
-        {activeTab !== 'tags' && <p className="InstellingenLayout__placeholder">Binnenkort beschikbaar.</p>}
+        {activeTab === 'algemeen' && <SequenceNumberSetting {...sequenceNumberSetting} />}
+        {activeTab === 'template' && <p className="InstellingenLayout__placeholder">Binnenkort beschikbaar.</p>}
       </div>
     </div>
   )

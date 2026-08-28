@@ -13,8 +13,14 @@ describe('InstellingenLayout', () => {
     expect(rendered).not.toContain('Binnenkort beschikbaar')
   })
 
-  it('toont een placeholder op de nog niet gebouwde tabs', () => {
+  it('toont een placeholder op de nog niet gebouwde Template-tab', () => {
     const rendered = renderToStaticMarkup(<InstellingenLayout testID={testID} {...InstellingenLayoutMock} activeTab="template" />)
     expect(rendered).toContain('Binnenkort beschikbaar.')
+  })
+
+  it('toont de SequenceNumberSetting op de Algemeen-tab', () => {
+    const rendered = renderToStaticMarkup(<InstellingenLayout testID={testID} {...InstellingenLayoutMock} activeTab="algemeen" />)
+    expect(rendered).toContain('Eerstvolgend volgnummer')
+    expect(rendered).not.toContain('Binnenkort beschikbaar')
   })
 })
