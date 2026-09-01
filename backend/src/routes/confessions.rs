@@ -162,6 +162,9 @@ async fn delete_confession_storage_objects(confession: &Confession) -> Result<()
     Ok(())
 }
 
+const SEQUENCE_NUMBER_MINIMUM_SETTING_KEY: &str = "sequence_number_minimum";
+const DEFAULT_SEQUENCE_NUMBER_MINIMUM: u32 = 1;
+
 /// HTTP-handler voor PUT /confessions/{id}/use. Kent het volgende volgnummer toe
 /// en zet de status op "used".
 pub async fn mark_confession_as_used(
@@ -174,14 +177,23 @@ pub async fn mark_confession_as_used(
     let existing_numbers = firestore::fetch_used_sequence_numbers(&db)
         .await
         .map_err(internal_error)?;
+    let minimum_next_number = fetch_sequence_number_minimum(&db).await.map_err(internal_error)?;
 
-    let next_number = determine_next_sequence_number(&existing_numbers);
+    let next_number = determine_next_sequence_number(&existing_numbers, minimum_next_number);
 
     firestore::mark_confession_as_used(&db, &confession_id, next_number)
         .await
         .map_err(internal_error)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Leest het instelbare minimum-volgnummer (issue #116) - default 1, zodat een
+/// nooit-ingestelde admin exact het oude gedrag krijgt (gewoon vanaf 1 tellen).
+async fn fetch_sequence_number_minimum(db: &::firestore::FirestoreDb) -> Result<u32, Box<dyn std::error::Error>> {
+    let stored_value = firestore::get_setting(db, SEQUENCE_NUMBER_MINIMUM_SETTING_KEY).await?;
+    let parsed_value = stored_value.and_then(|value| value.parse().ok());
+    Ok(parsed_value.unwrap_or(DEFAULT_SEQUENCE_NUMBER_MINIMUM))
 }
 
 /// HTTP-handler voor PUT /confessions/{id}/unmark (issue #97) - voor per ongeluk
