@@ -5,6 +5,7 @@ import Instellingen from './Instellingen'
 import { InstellingenMock } from './Instellingen.mock'
 import { listTags, createTag, updateTag, deleteTag } from '../../../api/tags'
 import type { Tag } from '../../../api/tags'
+import { getSetting, updateSetting } from '../../../api/settings'
 
 vi.mock('../../../api/tags', () => ({
   listTags: vi.fn(),
@@ -13,10 +14,20 @@ vi.mock('../../../api/tags', () => ({
   deleteTag: vi.fn(),
 }))
 
+// Instellingen haalt bij het monten ook de volgnummer-instelling op (issue
+// #116) - zonder deze mock doet dat een echte (falende) fetch, wat een
+// onverwachte tweede foutmelding oplevert en deze tests laat flaken.
+vi.mock('../../../api/settings', () => ({
+  getSetting: vi.fn(),
+  updateSetting: vi.fn(),
+}))
+
 const mockedListTags = vi.mocked(listTags)
 const mockedCreateTag = vi.mocked(createTag)
 const mockedUpdateTag = vi.mocked(updateTag)
 const mockedDeleteTag = vi.mocked(deleteTag)
+const mockedGetSetting = vi.mocked(getSetting)
+const mockedUpdateSetting = vi.mocked(updateSetting)
 
 const sampleTag: Tag = { id: 'tag-1', name: 'meme', color: '#aa3bff' }
 
@@ -25,6 +36,8 @@ beforeEach(() => {
   mockedCreateTag.mockReset()
   mockedUpdateTag.mockReset()
   mockedDeleteTag.mockReset()
+  mockedGetSetting.mockReset().mockResolvedValue('1')
+  mockedUpdateSetting.mockReset()
 })
 
 describe('Instellingen page', () => {
