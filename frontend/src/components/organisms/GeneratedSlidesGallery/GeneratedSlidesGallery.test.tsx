@@ -19,4 +19,16 @@ describe('GeneratedSlidesGallery', () => {
     )
     expect(rendered).toContain('Nog geen afbeeldingen gegenereerd.')
   })
+
+  it('toont "Download alles" zodra er meerdere slides zijn', () => {
+    const rendered = renderToStaticMarkup(<GeneratedSlidesGallery testID={testID} {...GeneratedSlidesGalleryMock} />)
+    expect(rendered).toContain('Download alles')
+  })
+
+  it('toont geen "Download alles" bij precies 1 slide - de losse knop volstaat dan al', () => {
+    const rendered = renderToStaticMarkup(
+      <GeneratedSlidesGallery testID={testID} {...GeneratedSlidesGalleryMock} slideUrls={[GeneratedSlidesGalleryMock.slideUrls[0]]} />,
+    )
+    expect(rendered).not.toContain('Download alles')
+  })
 })
