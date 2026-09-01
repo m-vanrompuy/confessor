@@ -1,6 +1,0 @@
-target/
-secrets/
-.env
-.env.example
-*.png
-!templates/*.png

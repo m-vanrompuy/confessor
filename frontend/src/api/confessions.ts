@@ -2,7 +2,7 @@
 // Veldnamen volgen exact de JSON van de backend (snake_case, geen case-conversie-
 // laag), zodat een wijziging aan de ene kant makkelijk terug te vinden is aan de andere.
 
-import { API_BASE_URL, apiFetch, buildQueryString } from './client'
+import { apiUrl, apiFetch, buildQueryString } from './client'
 
 export type ConfessionStatus = 'new' | 'used' | 'deleted'
 
@@ -129,14 +129,14 @@ export function generateConfessionImages(
 // rechtstreeks als <img src> gebruikt. Index is 1-based, zelfde volgorde als
 // de slide_paths van de backend.
 export function confessionSlideUrl(confessionId: string, slideIndex: number): string {
-  return `${API_BASE_URL}/confessions/${confessionId}/slides/${slideIndex}`
+  return apiUrl(`/confessions/${confessionId}/slides/${slideIndex}`)
 }
 
 // GET /confessions/{id}/memes/{index} - de originele, door de inzender
 // geüploade meme-bijlage (issue #109), niet als JSON maar rechtstreeks als
 // <img src> gebruikt. Index is 1-based, zelfde volgorde als meme_attachments.
 export function confessionMemeUrl(confessionId: string, memeIndex: number): string {
-  return `${API_BASE_URL}/confessions/${confessionId}/memes/${memeIndex}`
+  return apiUrl(`/confessions/${confessionId}/memes/${memeIndex}`)
 }
 
 export interface SyncResult {

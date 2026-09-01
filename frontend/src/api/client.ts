@@ -14,12 +14,23 @@ export class ApiError extends Error {
   }
 }
 
+// Bouwt de volledige backend-URL op, incl. de /api-prefix (issue #74) - alle
+// API-routes zitten daarachter, zodat ze niet botsen met de frontend's eigen
+// client-side routes (bv. React Router's "/confessions/:id" tegenover de
+// API's "GET /confessions/{id}"). Gedeeld tussen apiFetch en de directe
+// <img src>-URL's (confessionSlideUrl/confessionMemeUrl) zodat de prefix maar
+// op één plek staat. Lokaal is API_BASE_URL bv. "http://localhost:8080";
+// in productie (same-origin) is die leeg en werkt het gewoon relatief.
+export function apiUrl(path: string): string {
+  return `${API_BASE_URL}/api${path}`
+}
+
 // Roept de backend aan en parset een JSON-antwoord. De toegang zelf wordt
 // bewaakt door Identity-Aware Proxy vóór de backend (zie ISSUES.md) - de
 // IAP-sessiecookie van de browser reist automatisch mee via
 // `credentials: 'include'`, dus hier is geen wachtwoord of token nodig.
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     credentials: 'include',
     headers: {

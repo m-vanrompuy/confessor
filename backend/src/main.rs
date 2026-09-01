@@ -8,6 +8,8 @@ use axum::routing::put;
 use rustls::crypto::ring;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
+use tower_http::services::ServeFile;
 
 mod business;
 mod config;
@@ -24,7 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .install_default()
         .expect("failed to install rustls crypto provider");
 
-    let app = Router::new()
+    // Alle API-routes onder /api (issue #74) - de frontend heeft zelf een
+    // client-side route "/confessions/:id" (React Router, Detail-pagina) die
+    // anders letterlijk hetzelfde pad zou zijn als de API's GET /confessions/{id}.
+    // Same-origin serving zou dan dubbelzinnig zijn: een browser-navigatie naar
+    // "/confessions/abc" moet de SPA-shell krijgen (zodat React Router het
+    // overneemt), niet het JSON-antwoord van de API.
+    let api_routes = Router::new()
         .route("/sync", post(routes::sync::sync_confessions))
         .route("/cleanup", post(routes::cleanup::cleanup_expired_images))
         .route("/confessions", get(routes::confessions::list_confessions))
@@ -77,6 +85,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/settings/{key}",
             get(routes::settings::get_setting).put(routes::settings::update_setting),
         );
+
+    // Serveert de gebouwde frontend vanaf ./dist (issue #74) - leeg/afwezig
+    // lokaal (waar Vite's eigen dev-server op :5173 gebruikt wordt, zie
+    // dev_cors_layer hieronder), gevuld in de Docker-image (zie Dockerfile).
+    // Onbekende paden (elke client-side React Router-route, bv. "/instellingen"
+    // of "/confessions/abc") vallen terug op index.html, zodat de SPA zelf de
+    // juiste pagina rendert i.p.v. een 404 van de backend te tonen.
+    let app = Router::new()
+        .nest("/api", api_routes)
+        .fallback_service(ServeDir::new("dist").fallback(ServeFile::new("dist/index.html")));
 
     // Enkel in debug-builds (cargo run) - een release-build (zoals de Docker-image,
     // zie Dockerfile) bevat deze laag helemaal niet. Nodig omdat de frontend-dev-

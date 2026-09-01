@@ -16,7 +16,10 @@ TAG="${1:-v1}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/backend:${TAG}"
 
 echo "Bouwt en pusht ${IMAGE} (linux/amd64, ook vanaf Apple Silicon)..."
-docker buildx build --platform linux/amd64 -t "${IMAGE}" --push .
+# Build-context is de repo-root (..), niet backend/ zelf - de Dockerfile bouwt
+# ook frontend/ mee (issue #74, same-origin serving) en heeft die als sibling-
+# map dus nodig binnen de context. -f houdt de Dockerfile toch in backend/.
+docker buildx build --platform linux/amd64 -f Dockerfile -t "${IMAGE}" --push ..
 
 echo "Deployt naar Cloud Run..."
 gcloud run deploy "${SERVICE_NAME}" \
