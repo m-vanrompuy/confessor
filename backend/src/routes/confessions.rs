@@ -528,7 +528,13 @@ async fn render_and_upload_slides(
     template_config: &TemplateConfig,
     meme: Option<MemeCompositing<'_>>,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let slide_texts = split_text_into_slides(text, template_config.max_chars_per_slide as usize);
+    // max_chars_per_slide staat bewust NIET als los admin-instelbaar veld in
+    // TemplateConfig (was dat vroeger wel, zie issue #127): zo'n los getal loopt
+    // uit sync met de echte template-geometrie zodra font_size wijzigt, met een
+    // veel te vroege slide-split (en dus overbodige witruimte) als gevolg. In
+    // plaats daarvan altijd berekenen uit de werkelijke kaart-afmetingen.
+    let max_chars_per_slide = image_render::max_chars_per_slide(template_config.font_size);
+    let slide_texts = split_text_into_slides(text, max_chars_per_slide);
     let max_chars_per_line = image_render::max_chars_per_line(template_config.font_size);
     let last_slide_index = slide_texts.len().saturating_sub(1);
 
