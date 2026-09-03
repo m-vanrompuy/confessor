@@ -3,7 +3,9 @@
 
   <text x="160" y="{{NUMBER_Y}}" font-family="{{FONT_FAMILY}}" font-size="{{NUMBER_FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="start">#{{NUMBER}}</text>
 
-  <text y="{{TEXT_Y}}" font-family="{{FONT_FAMILY}}" font-size="{{FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="start">{{LINES}}</text>
+  <text y="{{TEXT_Y}}" font-size="{{FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="start">{{LINES}}</text>
+
+  {{EMOJI_ELEMENTS}}
 
   {{MEME_ELEMENT}}
 </svg>
