@@ -3,6 +3,7 @@ import type { FilterBarInterface } from './FilterBar.interface'
 
 const STATUS_OPTIONS = [
   { value: 'new', label: 'Nieuw' },
+  { value: 'unused', label: 'Ongebruikt' },
   { value: 'used', label: 'Gebruikt' },
 ]
 

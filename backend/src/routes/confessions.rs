@@ -31,7 +31,7 @@ const CAPTION_TEASER_MAX_LENGTH: usize = 150;
 
 #[derive(Deserialize)]
 pub struct ConfessionListQuery {
-    /// Bv. "new", "used" of "deleted". Onbekende waarden worden genegeerd (= geen filter).
+    /// Bv. "new", "unused", "used" of "deleted". Onbekende waarden worden genegeerd (= geen filter).
     status: Option<String>,
     /// Komma-gescheiden tag-ID's, bv. "meme,zoekertje".
     tags: Option<String>,
@@ -121,8 +121,9 @@ pub async fn delete_confession(
 
 /// HTTP-handler voor PUT /confessions/{id}/restore (issue #100). Haalt de
 /// originele tekst terug uit de Sheet - delete raakt de Sheet nooit aan, enkel
-/// Firestore - en zet de confession terug op "new", alsof ze net opnieuw gesynct
-/// is. Volgnummer, tags, gegenereerde afbeeldingen en stats blijven gewist; die
+/// Firestore - en zet de confession terug op "unused" ("new" is voorbehouden
+/// aan de laatste sync-run sinds issue #131, en herstellen is geen sync-actie).
+/// Volgnummer, tags, gegenereerde afbeeldingen en stats blijven gewist; die
 /// ontstaan pas weer via de normale flow (markeren als gebruikt, genereren, ...).
 pub async fn restore_confession(
     Path(confession_id): Path<String>,
@@ -198,7 +199,8 @@ async fn fetch_sequence_number_minimum(db: &::firestore::FirestoreDb) -> Result<
 
 /// HTTP-handler voor PUT /confessions/{id}/unmark (issue #97, uitgebreid in
 /// #120) - voor per ongeluk op "Markeer als gebruikt" klikken. Geeft het
-/// volgnummer vrij en zet de confession terug op "new". Ruimt ook eventueel al
+/// volgnummer vrij en zet de confession terug op "unused" ("new" is
+/// voorbehouden aan de laatste sync-run sinds issue #131). Ruimt ook eventueel al
 /// gegenereerde afbeeldingen op (Storage-objecten + slide_paths/
 /// suggested_caption) - die tonen het volgnummer al in de afbeelding zelf, dus
 /// zonder opruimen zou vrijgeven een verweesde afbeelding met een niet meer
@@ -738,7 +740,7 @@ mod tests {
         assert!(unmark_result.is_ok(), "unmark zou moeten lukken: {:?}", unmark_result.err());
 
         let after_unmark = after_unmark.expect("refetch mag niet falen").expect("confession moet nog bestaan");
-        assert_eq!(after_unmark.status, "new");
+        assert_eq!(after_unmark.status, "unused");
         assert!(after_unmark.sequence_number.is_none());
         assert!(after_unmark.used_at.is_none());
         assert_eq!(after_unmark.title, "Titel blijft");
@@ -801,7 +803,7 @@ mod tests {
         assert!(unmark_result.is_ok(), "unmark zou moeten lukken ondanks bestaande slides: {:?}", unmark_result.err());
 
         let after_unmark = after_unmark.expect("refetch mag niet falen").expect("confession moet nog bestaan");
-        assert_eq!(after_unmark.status, "new");
+        assert_eq!(after_unmark.status, "unused");
         assert!(after_unmark.sequence_number.is_none());
         assert!(after_unmark.slide_paths.is_empty());
         assert!(after_unmark.suggested_caption.is_none());

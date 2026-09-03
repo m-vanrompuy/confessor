@@ -67,7 +67,14 @@ pub struct MemeAttachment {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfessionStatus {
+    /// Enkel confessions die door de MEEST RECENTE sync-run binnengehaald zijn
+    /// (issue #131) - elke volgende sync-run zet de vorige lichting "new" terug
+    /// op "unused" (zie demote_new_confessions_to_unused), ongeacht of er deze
+    /// keer nieuwe rijen bijkwamen.
     New,
+    /// Nog niet gebruikt, maar ook niet (meer) van de laatste sync-run - de
+    /// standaardstatus voor alles wat wacht op gebruik zonder "nieuw" te zijn.
+    Unused,
     Used,
     Deleted,
 }
@@ -76,6 +83,7 @@ impl ConfessionStatus {
     fn as_str(self) -> &'static str {
         match self {
             ConfessionStatus::New => "new",
+            ConfessionStatus::Unused => "unused",
             ConfessionStatus::Used => "used",
             ConfessionStatus::Deleted => "deleted",
         }
@@ -84,6 +92,7 @@ impl ConfessionStatus {
     pub fn from_query_str(value: &str) -> Option<Self> {
         match value {
             "new" => Some(ConfessionStatus::New),
+            "unused" => Some(ConfessionStatus::Unused),
             "used" => Some(ConfessionStatus::Used),
             "deleted" => Some(ConfessionStatus::Deleted),
             _ => None,
@@ -254,17 +263,19 @@ pub async fn delete_confession(
     Ok(())
 }
 
-/// Zet een tombstoned confession terug op "new" met de originele tekst uit de
-/// Sheet (issue #100) - alsof ze net opnieuw gesynct is. Volgnummer, tags,
-/// gegenereerde afbeeldingen en stats blijven gewist; die worden pas opnieuw
-/// aangemaakt via de normale flow.
+/// Zet een tombstoned confession terug op "unused" met de originele tekst uit
+/// de Sheet (issue #100). Niet "new" (issue #131) - herstellen is geen
+/// sync-actie, dus verdient niet de "Nieuw"-tag, die voorbehouden is aan wat de
+/// laatste sync-run effectief binnenhaalde. Volgnummer, tags, gegenereerde
+/// afbeeldingen en stats blijven gewist; die worden pas opnieuw aangemaakt via
+/// de normale flow.
 pub async fn restore_confession(
     db: &FirestoreDb,
     confession_id: &str,
     row: &RawConfessionRow,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
-        status: "new".to_string(),
+        status: "unused".to_string(),
         text: row.text.clone(),
         admin_message: row.admin_message.clone(),
         image_link: row.image_link.clone(),
@@ -385,15 +396,16 @@ pub async fn mark_confession_as_used(
     Ok(())
 }
 
-/// Geeft het volgnummer vrij en zet de confession terug op "new" (issue #97) -
-/// voor per ongeluk op "Markeer als gebruikt" klikken. used_at wordt ook gewist,
-/// want die confession is niet meer "gebruikt" geweest. Wist ook slide_paths en
+/// Geeft het volgnummer vrij en zet de confession terug op "unused" (issue #97,
+/// niet "new" sinds issue #131 - ongedaan maken is geen sync-actie) - voor per
+/// ongeluk op "Markeer als gebruikt" klikken. used_at wordt ook gewist, want die
+/// confession is niet meer "gebruikt" geweest. Wist ook slide_paths en
 /// suggested_caption (issue #120) - beide tonen/verwijzen naar het net
 /// vrijgegeven volgnummer, de Storage-objecten zelf zijn al verwijderd door de
 /// caller (routes/confessions.rs) vóór deze aanroep.
 pub async fn unmark_confession_as_used(db: &FirestoreDb, confession_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     let placeholder_confession = Confession {
-        status: "new".to_string(),
+        status: "unused".to_string(),
         sequence_number: None,
         used_at: None,
         slide_paths: Vec::new(),
@@ -409,6 +421,48 @@ pub async fn unmark_confession_as_used(db: &FirestoreDb, confession_id: &str) ->
         .object(&placeholder_confession)
         .execute::<Confession>()
         .await?;
+
+    Ok(())
+}
+
+/// Grootte van elke Firestore BatchWrite-aanroep in demote_confessions_to_unused
+/// - de harde limiet van de Firestore-API is 500 writes/aanroep, met wat marge.
+const DEMOTE_BATCH_SIZE: usize = 400;
+
+/// Zet meerdere confessions in één keer op "unused" - gebruikt bij elke
+/// sync-run om de vórige lichting "nieuw" te laten 'aftrappen' naar
+/// "ongebruikt" (issue #131), zodat "nieuw" achteraf enkel nog klopt voor wat
+/// de nieuwe sync-run zelf binnenhaalt. Gebruikt bewust Firestore's BatchWrite
+/// i.p.v. één update per document na te lopen: bij de eerste sync-run na het
+/// uitrollen van deze feature staat immers de VOLLEDIGE historische
+/// achterstand nog op "new" (in de praktijk duizenden confessions) - één
+/// update per document zou die ene sync-aanroep minutenlang laten hangen.
+pub async fn demote_confessions_to_unused(
+    db: &FirestoreDb,
+    confession_ids: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let placeholder_confession = Confession {
+        status: "unused".to_string(),
+        ..Default::default()
+    };
+
+    for chunk in confession_ids.chunks(DEMOTE_BATCH_SIZE) {
+        let writer = db.create_simple_batch_writer().await?;
+        let mut batch = writer.new_batch();
+
+        for confession_id in chunk {
+            batch.update_object(
+                CONFESSIONS_COLLECTION,
+                confession_id,
+                &placeholder_confession,
+                Some(paths!(Confession::{status})),
+                None,
+                Vec::new(),
+            )?;
+        }
+
+        batch.write().await?;
+    }
 
     Ok(())
 }

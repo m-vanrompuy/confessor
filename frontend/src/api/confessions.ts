@@ -4,7 +4,7 @@
 
 import { apiUrl, apiFetch, buildQueryString } from './client'
 
-export type ConfessionStatus = 'new' | 'used' | 'deleted'
+export type ConfessionStatus = 'new' | 'unused' | 'used' | 'deleted'
 
 export interface MemeAttachment {
   storage_path: string
@@ -75,13 +75,15 @@ export function markConfessionAsUsed(confessionId: string): Promise<void> {
 }
 
 // PUT /confessions/{id}/restore - haalt de originele tekst terug uit de Sheet en
-// zet de confession terug op "new" (issue #100).
+// zet de confession terug op "unused" (issue #100, "unused" i.p.v. "new" sinds
+// issue #131 - herstellen is geen sync-actie).
 export function restoreConfession(confessionId: string): Promise<void> {
   return apiFetch<void>(`/confessions/${confessionId}/restore`, { method: 'PUT' })
 }
 
 // PUT /confessions/{id}/unmark - geeft het volgnummer vrij en zet de confession
-// terug op "new" (issue #97), voor per ongeluk "Markeer als gebruikt" klikken.
+// terug op "unused" (issue #97, "unused" i.p.v. "new" sinds issue #131), voor
+// per ongeluk "Markeer als gebruikt" klikken.
 export function unmarkConfessionAsUsed(confessionId: string): Promise<void> {
   return apiFetch<void>(`/confessions/${confessionId}/unmark`, { method: 'PUT' })
 }
