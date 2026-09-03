@@ -263,10 +263,10 @@ kuleuven-confessions-tool/
 
 - **Service:** `confessor-backend`, Cloud Run, regio `europe-west1` (zelfde regio als Firestore) —
   serveert zowel de API als de gebouwde frontend (één origin, zie "Tech stack")
-- **Herdeployen:** `backend/deploy.sh [tag]` — bouwt de image (linux/amd64, ook vanaf Apple Silicon), pusht naar Artifact Registry, deployt naar Cloud Run.
-  **Nog te doen:** de Dockerfile bouwt momenteel enkel de Rust-binary; moet uitgebreid worden met
-  een `npm run build`-stap voor `frontend/` en die `dist/`-map meekopiëren, zodat de backend hem
-  effectief kan serveren.
+- **Herdeployen:** `backend/deploy.sh [tag]` — bouwt de image (linux/amd64, ook vanaf Apple Silicon),
+  pusht naar Artifact Registry, deployt naar Cloud Run. Build-context is de repo-root (niet
+  `backend/`), want de Dockerfile bouwt ook `frontend/` mee (issue #74) en kopieert `dist/` in de
+  runtime-image, zodat de backend hem zelf kan serveren.
 - **Toegang:** `--no-allow-unauthenticated` (IAM-gated) — blijft zo. Wordt **niet** naar
   `--allow-unauthenticated` gezet: toegang loopt via Identity-Aware Proxy vóór de service, met een
   lijst toegestane Google-accounts (issue #31), niet via een publiek-open API.

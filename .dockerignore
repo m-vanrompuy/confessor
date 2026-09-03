@@ -1,0 +1,19 @@
+# Build-context is de repo-root (issue #74, zie backend/deploy.sh) - dit
+# bestand hoort daarom hier, niet in backend/. Belangrijkst: frontend/node_modules
+# uitsluiten - anders overschrijft de host's macOS/ARM-node_modules (via
+# `COPY frontend ./` in de Dockerfile) de Linux-node_modules die `npm ci` net
+# ín de container installeerde, wat native bindings (bv. rolldown) breekt.
+
+.git/
+
+backend/target/
+backend/secrets/
+backend/.env
+backend/.env.example
+backend/*.png
+!backend/templates/*.png
+
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.example
