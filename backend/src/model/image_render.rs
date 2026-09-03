@@ -1,3 +1,4 @@
+use crate::business::template::is_emoji_char;
 use base64::Engine;
 use std::fs;
 use std::path::Path;
@@ -30,6 +31,14 @@ const CARD_BOTTOM_Y: f64 = TEXT_START_Y + TEXT_AREA_HEIGHT_PX;
 
 /// Vuistregel: gemiddelde tekenbreedte ≈ dit percentage van de font-size (sans-serif Latin).
 const AVERAGE_CHAR_WIDTH_RATIO: f64 = 0.55;
+
+/// Vuistregel voor hoeveel horizontale ruimte één emoji-glyph inneemt, als
+/// veelvoud van de font-size. Bewust ruimer dan 1.0 (issue #125-vervolg): een
+/// te KRAPPE schatting hier is een écht rendering-bug (tekst erna overlapt
+/// zichtbaar met de emoji, bv. een ")" die volledig achter de emoji verdween),
+/// terwijl een te RUIME schatting enkel een klein beetje extra witruimte geeft
+/// - dus liever ruim geschat dan krap.
+const EMOJI_ADVANCE_WIDTH_RATIO: f64 = 1.3;
 
 /// Regelhoogte t.o.v. de font-size (moet overeenkomen met dy="1.4em" in build_text_elements).
 const LINE_HEIGHT_RATIO: f64 = 1.4;
@@ -254,8 +263,7 @@ fn build_text_elements(lines: &[String], font_family: &str, font_size: u32, text
 
             if segment.is_emoji {
                 emoji_elements.push(EmojiElement { text: segment.text, x: cursor_x, y: line_y });
-                // Ruwe schatting: een emoji-glyph is ~1em breed.
-                cursor_x += segment_char_count * font_size as f64;
+                cursor_x += segment_char_count * font_size as f64 * EMOJI_ADVANCE_WIDTH_RATIO;
             } else {
                 let escaped_text = escape_xml(&segment.text);
                 tspans.push_str(&format!(
@@ -302,23 +310,6 @@ fn split_into_font_segments(line: &str) -> Vec<TextSegment> {
     }
 
     segments
-}
-
-/// Herkent de gangbare emoji-Unicode-blokken, incl. variatieselector (voor
-/// emoji-presentatie van bv. ☺) en zero-width joiner (samengestelde emoji zoals
-/// gezinnen). Geen volledig sluitende emoji-detectie (skin-tone-modifiers,
-/// vlag-sequenties, ... zitten er niet allemaal in), maar dekt de gangbare
-/// gevallen die in confession-tekst voorkomen.
-fn is_emoji_char(ch: char) -> bool {
-    let code = ch as u32;
-    matches!(code,
-        0x1F300..=0x1FAFF // emoticons, symbolen, pictogrammen, transport, ...
-        | 0x2600..=0x27BF // diverse symbolen + dingbats (bv. ☺ ✨ ❤)
-        | 0x2B00..=0x2BFF // diverse symbolen/pijlen (bv. ⭐)
-        | 0x1F1E6..=0x1F1FF // regionale indicators (vlaggen)
-        | 0xFE0F // variatieselector-16 (dwingt emoji-presentatie af)
-        | 0x200D // zero-width joiner (samengestelde emoji)
-    )
 }
 
 /// Escaped tekst voor gebruik binnen XML/SVG, zodat gebruikersinvoer (bv. "&" of "<")
