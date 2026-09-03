@@ -37,6 +37,10 @@ RUN npm run build
 # Klein image: geen Rust-toolchain of Node nodig, enkel de gecompileerde
 # binary + de gebouwde frontend + wat resvg nodig heeft om tekst te renderen
 # (fonts) en HTTPS-calls te doen (ca-certificates, voor de Sheets API).
+# fonts-noto-color-emoji (issue #122): resvg 0.47 ondersteunt color-fonts
+# (COLR/CBDT/sbix) al sinds 0.42.0, maar zonder een emoji-font geïnstalleerd
+# heeft het nergens naartoe terug te vallen voor emoji-tekens - vandaar dat
+# die eerst helemaal niet verschenen.
 FROM debian:bookworm-slim
 WORKDIR /app
 
@@ -45,6 +49,7 @@ RUN apt-get update \
         ca-certificates \
         fonts-liberation \
         fonts-dejavu-core \
+        fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=backend-builder /app/target/release/Confessor ./Confessor
