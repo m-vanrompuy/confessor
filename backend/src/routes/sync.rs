@@ -4,6 +4,7 @@
 use crate::business::dedupe::filter_new_rows;
 use crate::business::title::generate_title;
 use crate::model::firestore;
+use crate::model::firestore::ConfessionStatus;
 use crate::model::sheets;
 use crate::model::sheets::RawConfessionRow;
 use axum::Json;
@@ -23,12 +24,28 @@ pub async fn sync_confessions() -> Result<Json<SyncResult>, (StatusCode, String)
         .await
         .map_err(internal_error)?;
 
+    // "Nieuw" mag enkel gelden voor wat DEZE sync-run binnenhaalt (issue #131) -
+    // de vorige lichting "nieuw" verhuist dus eerst naar "ongebruikt", ook als
+    // deze run zelf 0 nieuwe confessions oplevert.
+    demote_previously_new_confessions(&db).await.map_err(internal_error)?;
+
     let new_rows = fetch_new_confession_rows(&db).await.map_err(internal_error)?;
     save_all_confessions(&db, &new_rows).await.map_err(internal_error)?;
 
     Ok(Json(SyncResult {
         new_confessions_count: new_rows.len(),
     }))
+}
+
+/// Zet alle confessions die nog op "nieuw" stonden van een vorige sync-run om
+/// naar "ongebruikt" (issue #131).
+async fn demote_previously_new_confessions(
+    db: &::firestore::FirestoreDb,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let previously_new = firestore::fetch_confessions(db, Some(ConfessionStatus::New), None).await?;
+    let previously_new_ids: Vec<String> = previously_new.into_iter().map(|confession| confession.id).collect();
+
+    firestore::demote_confessions_to_unused(db, &previously_new_ids).await
 }
 
 /// Haalt de sheet op en houdt enkel de rijen over die nog niet in Firestore staan.

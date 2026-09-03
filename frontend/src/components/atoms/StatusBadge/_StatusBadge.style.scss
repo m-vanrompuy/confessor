@@ -11,6 +11,11 @@
     background: var(--accent-bg);
   }
 
+  &--unused {
+    color: var(--text);
+    background: var(--border);
+  }
+
   &--used {
     color: var(--text-h);
     background: var(--code-bg);

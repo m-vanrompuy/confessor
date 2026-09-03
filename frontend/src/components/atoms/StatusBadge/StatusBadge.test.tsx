@@ -8,6 +8,7 @@ const testID = 'StatusBadge-' + Math.floor(Math.random() * 90000 + 10000)
 describe('StatusBadge', () => {
   it('renders the Dutch label for each status', () => {
     expect(renderToStaticMarkup(<StatusBadge testID={testID} status="new" />)).toContain('Nieuw')
+    expect(renderToStaticMarkup(<StatusBadge testID={testID} status="unused" />)).toContain('Ongebruikt')
     expect(renderToStaticMarkup(<StatusBadge testID={testID} status="used" />)).toContain('Gebruikt')
     expect(renderToStaticMarkup(<StatusBadge testID={testID} status="deleted" />)).toContain('Verwijderd')
   })

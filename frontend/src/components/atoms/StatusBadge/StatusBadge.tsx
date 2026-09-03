@@ -3,6 +3,7 @@ import type { StatusBadgeInterface } from './StatusBadge.interface'
 
 const STATUS_LABELS: Record<ConfessionStatus, string> = {
   new: 'Nieuw',
+  unused: 'Ongebruikt',
   used: 'Gebruikt',
   deleted: 'Verwijderd',
 }
