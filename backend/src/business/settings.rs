@@ -13,9 +13,5 @@ pub fn validate_template_config(config: &TemplateConfig) -> Result<(), String> {
         return Err("font_size moet groter dan 0 zijn".to_string());
     }
 
-    if config.max_chars_per_slide == 0 {
-        return Err("max_chars_per_slide moet groter dan 0 zijn".to_string());
-    }
-
     Ok(())
 }

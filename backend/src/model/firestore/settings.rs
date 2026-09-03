@@ -56,7 +56,6 @@ pub struct TemplateConfig {
     pub font_family: String,
     pub font_size: u32,
     pub text_color: String,
-    pub max_chars_per_slide: u32,
 }
 
 pub async fn get_template_config(
