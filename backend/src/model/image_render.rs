@@ -11,8 +11,9 @@ const TEMPLATES_DIR: &str = "templates";
 // Dit blok is de enige plek waar de layout-formules staan.
 
 /// Linker-x van de tekstkolom (na de nummer-kolom). De SVG zet zelf geen x meer
-/// op het <text>-element; elke <tspan> krijgt deze waarde vanuit build_tspans.
-const TEXT_LEFT_X: &str = "305";
+/// op het <text>-element; elke regel/segment krijgt deze waarde vanuit
+/// build_text_elements.
+const TEXT_LEFT_X: f64 = 305.0;
 
 /// Y waar de tekst normaal start (geen meme, of meme staat na de tekst).
 const TEXT_START_Y: f64 = 270.0;
@@ -30,7 +31,7 @@ const CARD_BOTTOM_Y: f64 = TEXT_START_Y + TEXT_AREA_HEIGHT_PX;
 /// Vuistregel: gemiddelde tekenbreedte ≈ dit percentage van de font-size (sans-serif Latin).
 const AVERAGE_CHAR_WIDTH_RATIO: f64 = 0.55;
 
-/// Regelhoogte t.o.v. de font-size (moet overeenkomen met dy="1.4em" in build_tspans).
+/// Regelhoogte t.o.v. de font-size (moet overeenkomen met dy="1.4em" in build_text_elements).
 const LINE_HEIGHT_RATIO: f64 = 1.4;
 
 /// Het nummer wordt groter weergegeven dan de body-tekst, vaste verhouding.
@@ -163,10 +164,12 @@ fn layout_meme_after(num_lines: usize, font_size: u32, scale: f64) -> Layout {
 }
 
 fn fill_template(template: &str, input: &SlideRenderInput) -> String {
-    let lines_svg = build_tspans(input.lines);
     let number_font_size = (input.font_size as f64 * NUMBER_FONT_SIZE_RATIO).round() as u32;
     let meme_placement = input.meme.as_ref().map(|meme| (meme.position, meme.scale));
     let layout = compute_layout(input.lines.len(), input.font_size, meme_placement);
+
+    let (lines_svg, emoji_elements_svg) =
+        build_text_elements(input.lines, input.font_family, input.font_size, input.text_color, layout.text_y);
 
     let meme_element = match (&input.meme, &layout.meme_box) {
         (Some(meme), Some(meme_box)) => build_meme_element(meme, meme_box),
@@ -175,6 +178,7 @@ fn fill_template(template: &str, input: &SlideRenderInput) -> String {
 
     template
         .replace("{{LINES}}", &lines_svg)
+        .replace("{{EMOJI_ELEMENTS}}", &emoji_elements_svg)
         .replace("{{NUMBER}}", &input.sequence_number.to_string())
         .replace("{{NUMBER_FONT_SIZE}}", &number_font_size.to_string())
         .replace("{{FONT_FAMILY}}", &escape_xml(input.font_family))
@@ -199,18 +203,122 @@ fn build_meme_element(meme: &MemeInput, meme_box: &MemeBox) -> String {
     )
 }
 
-fn build_tspans(lines: &[String]) -> String {
-    let mut tspans = String::new();
+/// Emoji-glyphen zitten niet in het body-lettertype (bv. Liberation Serif).
+/// Eerste poging: enkel de emoji naar een ander <tspan> met een eigen
+/// font-family sturen, tekst ernaast op het geconfigureerde font laten - bleek
+/// NIET te werken. Uitgetest (issue #122-vervolg, losstaande minimale SVG's,
+/// buiten deze hele pipeline): usvg 0.47 rendert een volledig <text>-element
+/// verkeerd zodra het twee <tspan>'s met VERSCHILLENDE font-families bevat en
+/// één daarvan een color-font (Noto Color Emoji) is - ook het <tspan> met het
+/// "juiste" font-family krijgt dan een verkeerd (vet/ander) lettertype. Aparte,
+/// onafhankelijke <text>-elementen renderden in diezelfde test wel allebei
+/// correct. Vandaar: emoji's komen als eigen <text>-elementen buiten de
+/// hoofdtekst, met zelf geschatte x/y (zelfde vuistregel-aanpak als
+/// max_chars_per_line - geen pixel-perfecte tekstmeting, maar precies genoeg
+/// om netjes aan te sluiten).
+const EMOJI_FONT_FAMILY: &str = "Noto Color Emoji";
 
-    for (index, line) in lines.iter().enumerate() {
-        let line_offset = if index == 0 { "0" } else { "1.4em" };
-        let escaped_line = escape_xml(line);
-        tspans.push_str(&format!(
-            r#"<tspan x="{TEXT_LEFT_X}" dy="{line_offset}">{escaped_line}</tspan>"#
-        ));
+/// Positie + inhoud van één emoji-<text>-element, apart van de hoofdtekst.
+struct EmojiElement {
+    text: String,
+    x: f64,
+    y: f64,
+}
+
+/// Bouwt zowel de tspans voor de hoofdtekst (binnen het bestaande <text>) als de
+/// losse emoji-<text>-elementen. `text_y` is de baseline van de eerste regel
+/// (zie Layout::text_y) - nodig om de absolute y van latere regels te berekenen,
+/// want emoji-elementen kunnen niet meeliften op SVG's relatieve dy-opstapeling
+/// zoals tspans dat wel kunnen.
+fn build_text_elements(lines: &[String], font_family: &str, font_size: u32, text_color: &str, text_y: f64) -> (String, String) {
+    let escaped_font_family = escape_xml(font_family);
+    let char_width = font_size as f64 * AVERAGE_CHAR_WIDTH_RATIO;
+    let line_height = font_size as f64 * LINE_HEIGHT_RATIO;
+
+    let mut tspans = String::new();
+    let mut emoji_elements: Vec<EmojiElement> = Vec::new();
+
+    for (line_index, line) in lines.iter().enumerate() {
+        let line_y = text_y + line_index as f64 * line_height;
+
+        // Elke tspan krijgt zelf een expliciete x ÉN y (geen dy/cumulatieve
+        // opstapeling) - uitgetest: een lege "anchor"-tspan die enkel dy zet
+        // om de regel te positioneren droeg NIET betrouwbaar over naar het
+        // volgende <tspan> in usvg 0.47 (regels vielen over elkaar heen zodra
+        // er tussendoor emoji-elementen uit de flow gehaald werden). Volledig
+        // expliciete x/y per tspan is voorspelbaarder, ook al kost dat een
+        // beetje herhaling.
+        let mut cursor_x = TEXT_LEFT_X;
+        for segment in split_into_font_segments(line) {
+            let segment_char_count = segment.text.chars().count() as f64;
+
+            if segment.is_emoji {
+                emoji_elements.push(EmojiElement { text: segment.text, x: cursor_x, y: line_y });
+                // Ruwe schatting: een emoji-glyph is ~1em breed.
+                cursor_x += segment_char_count * font_size as f64;
+            } else {
+                let escaped_text = escape_xml(&segment.text);
+                tspans.push_str(&format!(
+                    r#"<tspan x="{cursor_x}" y="{line_y}" font-family="{escaped_font_family}">{escaped_text}</tspan>"#
+                ));
+                cursor_x += segment_char_count * char_width;
+            }
+        }
     }
 
-    tspans
+    let emoji_elements_svg = emoji_elements
+        .iter()
+        .map(|emoji| build_emoji_text_element(emoji, font_size, text_color))
+        .collect::<String>();
+
+    (tspans, emoji_elements_svg)
+}
+
+fn build_emoji_text_element(emoji: &EmojiElement, font_size: u32, text_color: &str) -> String {
+    format!(
+        r#"<text x="{}" y="{}" font-family="{EMOJI_FONT_FAMILY}" font-size="{font_size}" fill="{}" text-anchor="start">{}</text>"#,
+        emoji.x,
+        emoji.y,
+        escape_xml(text_color),
+        escape_xml(&emoji.text)
+    )
+}
+
+struct TextSegment {
+    text: String,
+    is_emoji: bool,
+}
+
+/// Splitst een regel in aaneengesloten stukken tekst vs. emoji.
+fn split_into_font_segments(line: &str) -> Vec<TextSegment> {
+    let mut segments: Vec<TextSegment> = Vec::new();
+
+    for ch in line.chars() {
+        let is_emoji = is_emoji_char(ch);
+        match segments.last_mut() {
+            Some(last) if last.is_emoji == is_emoji => last.text.push(ch),
+            _ => segments.push(TextSegment { text: ch.to_string(), is_emoji }),
+        }
+    }
+
+    segments
+}
+
+/// Herkent de gangbare emoji-Unicode-blokken, incl. variatieselector (voor
+/// emoji-presentatie van bv. ☺) en zero-width joiner (samengestelde emoji zoals
+/// gezinnen). Geen volledig sluitende emoji-detectie (skin-tone-modifiers,
+/// vlag-sequenties, ... zitten er niet allemaal in), maar dekt de gangbare
+/// gevallen die in confession-tekst voorkomen.
+fn is_emoji_char(ch: char) -> bool {
+    let code = ch as u32;
+    matches!(code,
+        0x1F300..=0x1FAFF // emoticons, symbolen, pictogrammen, transport, ...
+        | 0x2600..=0x27BF // diverse symbolen + dingbats (bv. ☺ ✨ ❤)
+        | 0x2B00..=0x2BFF // diverse symbolen/pijlen (bv. ⭐)
+        | 0x1F1E6..=0x1F1FF // regionale indicators (vlaggen)
+        | 0xFE0F // variatieselector-16 (dwingt emoji-presentatie af)
+        | 0x200D // zero-width joiner (samengestelde emoji)
+    )
 }
 
 /// Escaped tekst voor gebruik binnen XML/SVG, zodat gebruikersinvoer (bv. "&" of "<")
@@ -222,7 +330,7 @@ fn escape_xml(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn rasterize_svg(svg_content: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+pub fn rasterize_svg(svg_content: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut options = usvg::Options {
         resources_dir: Some(Path::new(TEMPLATES_DIR).to_path_buf()),
         ..usvg::Options::default()
@@ -245,6 +353,64 @@ fn rasterize_svg(svg_content: &str) -> Result<Vec<u8>, Box<dyn std::error::Error
 mod tests {
     use super::*;
     use crate::business::template::{split_text_into_slides, wrap_paragraph_into_lines};
+
+    #[test]
+    fn split_into_font_segments_keeps_plain_text_as_one_segment() {
+        let segments = split_into_font_segments("gewone tekst zonder emoji");
+        assert_eq!(segments.len(), 1);
+        assert!(!segments[0].is_emoji);
+        assert_eq!(segments[0].text, "gewone tekst zonder emoji");
+    }
+
+    #[test]
+    fn split_into_font_segments_isolates_a_trailing_emoji() {
+        let segments = split_into_font_segments("normale tekst 😭");
+        assert_eq!(segments.len(), 2);
+        assert!(!segments[0].is_emoji);
+        assert_eq!(segments[0].text, "normale tekst ");
+        assert!(segments[1].is_emoji);
+        assert_eq!(segments[1].text, "😭");
+    }
+
+    #[test]
+    fn split_into_font_segments_handles_emoji_in_the_middle() {
+        let segments = split_into_font_segments("voor 👀 na");
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0].text, "voor ");
+        assert!(!segments[0].is_emoji);
+        assert_eq!(segments[1].text, "👀");
+        assert!(segments[1].is_emoji);
+        assert_eq!(segments[2].text, " na");
+        assert!(!segments[2].is_emoji);
+    }
+
+    #[test]
+    fn build_text_elements_keeps_the_emoji_out_of_the_main_text_flow() {
+        let lines = vec!["blij nu 😭".to_string()];
+        let (tspans, emoji_svg) = build_text_elements(&lines, "Liberation Serif", 24, "#000000", 270.0);
+
+        // De emoji zelf mag NIET als tspan in de hoofdtekst zitten - enkel als
+        // apart <text>-element (issue #122-vervolg, zie build_text_elements-doc).
+        assert!(!tspans.contains('😭'), "emoji hoort niet in de hoofdtekst-tspans: {tspans}");
+        assert!(
+            tspans.contains(r#"<tspan x="305" y="270" font-family="Liberation Serif">blij nu </tspan>"#),
+            "tekst-stuk moet het geconfigureerde font-family houden: {tspans}"
+        );
+        assert!(
+            emoji_svg.contains(&format!(r#"font-family="{EMOJI_FONT_FAMILY}""#)) && emoji_svg.contains('😭'),
+            "emoji moet als apart <text>-element met eigen font-family staan: {emoji_svg}"
+        );
+    }
+
+    #[test]
+    fn build_text_elements_positions_the_emoji_after_the_preceding_text() {
+        let lines = vec!["ab 😭".to_string()];
+        let (_, emoji_svg) = build_text_elements(&lines, "Liberation Serif", 24, "#000000", 270.0);
+
+        // x van de emoji moet voorbij TEXT_LEFT_X liggen (na "ab "), niet erop.
+        assert!(emoji_svg.contains(r#"x="344.6""#), "emoji-x zou net na de tekst moeten starten: {emoji_svg}");
+        assert!(emoji_svg.contains(r#"y="270""#), "emoji-y moet gelijk zijn aan de tekst-baseline van die regel: {emoji_svg}");
+    }
 
     #[test]
     fn renders_a_sample_slide_to_disk() {
