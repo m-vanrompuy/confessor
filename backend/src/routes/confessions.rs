@@ -196,12 +196,14 @@ async fn fetch_sequence_number_minimum(db: &::firestore::FirestoreDb) -> Result<
     Ok(parsed_value.unwrap_or(DEFAULT_SEQUENCE_NUMBER_MINIMUM))
 }
 
-/// HTTP-handler voor PUT /confessions/{id}/unmark (issue #97) - voor per ongeluk
-/// op "Markeer als gebruikt" klikken. Geeft het volgnummer vrij en zet de
-/// confession terug op "new". Enkel toegestaan zolang er nog geen afbeeldingen
-/// gegenereerd zijn - die tonen het volgnummer al in de afbeelding zelf, dus zou
-/// vrijgeven na het genereren een verkeerd/dubbel nummer opleveren (gebruik dan
-/// Verwijderen).
+/// HTTP-handler voor PUT /confessions/{id}/unmark (issue #97, uitgebreid in
+/// #120) - voor per ongeluk op "Markeer als gebruikt" klikken. Geeft het
+/// volgnummer vrij en zet de confession terug op "new". Ruimt ook eventueel al
+/// gegenereerde afbeeldingen op (Storage-objecten + slide_paths/
+/// suggested_caption) - die tonen het volgnummer al in de afbeelding zelf, dus
+/// zonder opruimen zou vrijgeven een verweesde afbeelding met een niet meer
+/// geldig nummer achterlaten. Tekst/tags/meme-bijlagen blijven wel behouden,
+/// in tegenstelling tot Verwijderen.
 pub async fn unmark_confession_as_used(
     Path(confession_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
@@ -211,7 +213,8 @@ pub async fn unmark_confession_as_used(
 
     let confession = fetch_confession_or_404(&db, &confession_id).await?;
     require_used_status(&confession)?;
-    require_no_generated_slides(&confession)?;
+
+    delete_slide_storage_objects(&confession).await.map_err(internal_error)?;
 
     firestore::unmark_confession_as_used(&db, &confession_id)
         .await
@@ -227,12 +230,11 @@ fn require_used_status(confession: &Confession) -> Result<(), (StatusCode, Strin
     Ok(())
 }
 
-fn require_no_generated_slides(confession: &Confession) -> Result<(), (StatusCode, String)> {
-    if !confession.slide_paths.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "er zijn al afbeeldingen gegenereerd met dit volgnummer - gebruik Verwijderen i.p.v. ongedaan maken".to_string(),
-        ));
+/// Enkel de gerenderde slides, niet de meme-bijlagen - die blijven bij een
+/// unmark behouden (in tegenstelling tot delete_confession_storage_objects).
+async fn delete_slide_storage_objects(confession: &Confession) -> Result<(), Box<dyn std::error::Error>> {
+    for slide_path in &confession.slide_paths {
+        storage::delete_object(slide_path).await?;
     }
     Ok(())
 }
@@ -687,15 +689,6 @@ mod tests {
         assert!(require_used_status(&used_confession).is_ok());
     }
 
-    #[test]
-    fn require_no_generated_slides_rejects_once_slides_exist() {
-        let without_slides = Confession::default();
-        let with_slides = Confession { slide_paths: vec!["confessions/x/slide-1.png".to_string()], ..Default::default() };
-
-        assert!(require_no_generated_slides(&without_slides).is_ok());
-        assert!(require_no_generated_slides(&with_slides).is_err());
-    }
-
     /// Integratietest tegen echte Firestore (issue #97) - zet een synthetische
     /// "used"-confession neer, roept de echte unmark-flow aan, en ruimt zichzelf op.
     #[tokio::test]
@@ -743,5 +736,74 @@ mod tests {
         assert!(after_unmark.sequence_number.is_none());
         assert!(after_unmark.used_at.is_none());
         assert_eq!(after_unmark.title, "Titel blijft");
+    }
+
+    /// Integratietest (issue #120) - unmark moet ook werken ná het genereren van
+    /// afbeeldingen: de gegenereerde slide moet uit Storage verdwijnen, en tags/
+    /// tekst blijven behouden (in tegenstelling tot delete).
+    #[tokio::test]
+    async fn unmark_confession_as_used_cleans_up_already_generated_slides() {
+        dotenvy::dotenv().ok();
+        rustls::crypto::ring::default_provider().install_default().ok();
+
+        let db = firestore::make_firestore_client().await.expect("firestore client");
+        let confession_id = "test-issue-120-unmark-with-slides";
+        let slide_path = "test/issue-120-fake-slide.png";
+
+        let one_pixel_png: Vec<u8> = vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00,
+            0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+            0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        storage::upload_png(slide_path, one_pixel_png).await.expect("upload fake slide");
+
+        let synthetic_confession = Confession {
+            id: confession_id.to_string(),
+            timestamp: "1-1-2026 00:00:00".to_string(),
+            title: "Titel blijft".to_string(),
+            text: "Tekst blijft ook".to_string(),
+            tag_ids: vec!["tag-1".to_string()],
+            status: "used".to_string(),
+            sequence_number: Some(998),
+            used_at: Some(Utc::now()),
+            slide_paths: vec![slide_path.to_string()],
+            suggested_caption: Some("Confession #998\n\nTekst blijft ook".to_string()),
+            ..Default::default()
+        };
+
+        db.fluent()
+            .insert()
+            .into(firestore::CONFESSIONS_COLLECTION)
+            .document_id(confession_id)
+            .object(&synthetic_confession)
+            .execute::<Confession>()
+            .await
+            .expect("insert synthetic confession");
+
+        let unmark_result = unmark_confession_as_used(Path(confession_id.to_string())).await;
+        let after_unmark = firestore::fetch_confession_by_id(&db, confession_id).await;
+
+        db.fluent()
+            .delete()
+            .from(firestore::CONFESSIONS_COLLECTION)
+            .document_id(confession_id)
+            .execute()
+            .await
+            .expect("cleanup: synthetic document verwijderen");
+
+        assert!(unmark_result.is_ok(), "unmark zou moeten lukken ondanks bestaande slides: {:?}", unmark_result.err());
+
+        let after_unmark = after_unmark.expect("refetch mag niet falen").expect("confession moet nog bestaan");
+        assert_eq!(after_unmark.status, "new");
+        assert!(after_unmark.sequence_number.is_none());
+        assert!(after_unmark.slide_paths.is_empty());
+        assert!(after_unmark.suggested_caption.is_none());
+        // Tekst/titel/tags blijven behouden - unmark is geen delete.
+        assert_eq!(after_unmark.title, "Titel blijft");
+        assert_eq!(after_unmark.text, "Tekst blijft ook");
+        assert_eq!(after_unmark.tag_ids, vec!["tag-1".to_string()]);
+
+        assert!(storage::download_object(slide_path).await.is_err(), "slide had verwijderd moeten zijn uit storage");
     }
 }

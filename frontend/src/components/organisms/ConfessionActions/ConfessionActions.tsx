@@ -8,7 +8,6 @@ const ConfessionActions = ({
   onGenerate,
   onRestore,
   onUnmark,
-  hasGeneratedSlides,
   markingAsUsed = false,
   deleting = false,
   generating = false,
@@ -18,11 +17,10 @@ const ConfessionActions = ({
 }: ConfessionActionsInterface) => {
   const isDeleted = status === 'deleted'
   const isUsed = status === 'used'
-  const canUnmark = isUsed && !hasGeneratedSlides
 
   return (
     <div className="ConfessionActions" data-testid={testID}>
-      {canUnmark ? (
+      {isUsed ? (
         <Button variant="secondary" onClick={onUnmark} disabled={unmarking}>
           {unmarking ? 'Bezig...' : 'Ongedaan maken'}
         </Button>
