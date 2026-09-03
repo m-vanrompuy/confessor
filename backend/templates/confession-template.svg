@@ -1,7 +1,10 @@
 <svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg">
   <image href="background.png" x="0" y="0" width="1080" height="1080" preserveAspectRatio="xMidYMid slice"/>
 
-  <text x="160" y="{{NUMBER_Y}}" font-family="{{FONT_FAMILY}}" font-size="{{NUMBER_FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="start">#{{NUMBER}}</text>
+  <!-- x="220" is het horizontale midden van het logo-rondje dat in background.png
+       gebakken zit (gemeten). text-anchor="middle" i.p.v. "start" zodat het nummer
+       daar netjes onder gecentreerd blijft ongeacht het aantal cijfers. -->
+  <text x="220" y="{{NUMBER_Y}}" font-family="{{FONT_FAMILY}}" font-size="{{NUMBER_FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="middle">#{{NUMBER}}</text>
 
   <text y="{{TEXT_Y}}" font-size="{{FONT_SIZE}}" fill="{{TEXT_COLOR}}" text-anchor="start">{{LINES}}</text>
 
