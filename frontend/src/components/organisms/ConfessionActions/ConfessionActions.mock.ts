@@ -7,5 +7,4 @@ export const ConfessionActionsMock: ConfessionActionsInterface = {
   onGenerate: () => {},
   onRestore: () => {},
   onUnmark: () => {},
-  hasGeneratedSlides: false,
 }

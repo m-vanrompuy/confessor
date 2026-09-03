@@ -205,7 +205,6 @@ const DetailContent = ({ confession, tags, onRefetch, onBack, testID }: DetailCo
           onGenerate: handleGenerate,
           onRestore: handleRestore,
           onUnmark: handleUnmark,
-          hasGeneratedSlides: confession.slide_paths.length > 0,
           markingAsUsed,
           deleting,
           generating,
